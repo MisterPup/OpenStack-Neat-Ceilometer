@@ -1,0 +1,6 @@
+include README.rst
+include LICENSE
+include NOTICE
+include distribute_setup.py
+include init.d/*
+include neat.conf
