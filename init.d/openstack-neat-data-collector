@@ -56,10 +56,11 @@ start() {
 
 stop() {
     echo -n $"Stopping $prog: "
-    killproc -p $pidfile $prog
+    #killproc -p $pidfile $prog
+    start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE    
     retval=$?
     echo
-    [ $retval -eq 0 ] && rm -f $lockfile
+    [ $retval -eq 0 ] && rm -f $lockfile && rm -f $pidfile
     return $retval
 }
 
