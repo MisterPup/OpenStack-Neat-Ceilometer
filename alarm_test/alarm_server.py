@@ -18,6 +18,12 @@ def service_underload():
         request = bottle.request
         json = request.json
 
+        keystone = {}
+        keystone['username']="admin" #env['OS_USERNAME']
+        keystone['password']="torvergata" #env['OS_PASSWORD']
+        keystone['auth_url']="http://controller:35357/v2.0" #env['OS_AUTH_URL']
+        keystone['tenant_name']="admin" #env['OS_TENANT_NAME']
+
         if not json is None:
 		ceilo_client = (ceiloclient.get_client(2, username=keystone['username'], password=keystone['password'],
                          tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
@@ -29,10 +35,11 @@ def service_underload():
                 alarm = ceilo_client.alarms.get(alarm_id)
                 resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1 (host_node)
                 hostname = resource_id.split('_')[0] #compute1
-                alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
-                alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
-                alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
-
+                #alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
+                #alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
+                #alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
+		alarm_time_sec = time.time()
+	
                 #log
                 """ 
                 Send information to global manager
@@ -40,8 +47,8 @@ def service_underload():
 		hash_username = sha1('admin').hexdigest()
 		hash_password = sha1('torvergata').hexdigest()
 
-                r = (requests.put('http://http://controller:9810/local', {'username': hash_username,
-                'password': hash_password, 'time': alarm_time_sec, 'host': hostname, 'reason': 0})) #send request to global manager
+                r = (requests.put('http://controller:60080', {'username': hash_username,
+                'password': hash_password, 'ceilometer' : 1, 'time': alarm_time_sec, 'host': hostname, 'reason': 0})) #send request to global manager
   
 
 @bottle.post('/overload')
@@ -71,9 +78,9 @@ def service_overload():
 		print alarm.__getattr__('threshold_rule')
 		resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1
 		hostname = resource_id.split('_')[0] #get host from resource_id: compute1_compute1 -> compute1
-		alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
-		alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
-		alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
+		#alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
+		#alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
+		#alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
 		alarm_time_sec = time.time()
 	
 		print "hostname %s" % hostname
@@ -140,8 +147,12 @@ def service_overload():
 		url = 'http://controller:9810/global'
 
 		r = (requests.put('http://controller:60080', {'username': hash_username,
-				'password': hash_password, 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 'vm_uuids': ','.join(vm_uuids)}))
+				'password': hash_password, 'ceilometer': 1, 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 'vm_uuids': ','.join(vm_uuids)}))
 
 		print "PUT completed"
+
+@bottle.route('/', method='ANY')
+def error():
+	print "Only POST request to overload or underload are admitted"
 
 bottle.run(host='controller', port=9710)

@@ -74,6 +74,7 @@ import bottle
 from hashlib import sha1
 import novaclient
 from novaclient.v1_1 import client
+from ceilometerclient import client as ceiloclient
 import time
 import subprocess
 import random
@@ -226,25 +227,25 @@ def service():
     try:
         if params['reason'] == 0:
             log.info('Processing an underload of a host %s', params['host'])
-            if 'ceilometer' not in params
+            if 'ceilometer' not in params:
                 execute_underload(
                     state['config'],
                     state['state'],
                     params['host'])
-            else #request sent from alarm manager after underload alarm
+            else: #request sent from alarm manager after underload alarm
                 execute_underload_ceilometer(
                     state['config'],
                     state['state'],
                     params['host'])                
         else:
             log.info('Processing an overload, VMs: %s', str(params['vm_uuids']))
-            if 'ceilometer' not in params
+            if 'ceilometer' not in params:
                 execute_overload(
                     state['config'],
                     state['state'],
                     params['host'],
                     params['vm_uuids'])
-            else #request sent from alarm manager after overload alarm
+            else: #request sent from alarm manager after overload alarm
                 execute_overload_ceilometer(
                     state['config'],
                     state['state'],
@@ -445,10 +446,10 @@ def execute_underload(config, state, host):
             hosts_to_deactivate.remove(underloaded_host)
     else:
         log.info('Started underload VM migrations')
-        migrate_vms(state['db'],
-                    state['nova'],
+        migrate_vms(state['nova'],
                     config['vm_instance_directory'],
-                    placement)
+                    placement, 
+		    state['db'])
         log.info('Completed underload VM migrations')
 
     if hosts_to_deactivate:
@@ -461,20 +462,40 @@ def execute_underload(config, state, host):
 
 @contract
 def execute_underload_ceilometer(config, state, host):
+    """
+    :param config: A config dictionary.
+     :type config: dict(str: *)
+
+    :param state: A state dictionary.
+     :type state: dict(str: *)
+
+    :param host: A host name.
+     :type host: str
+
+    :return: The updated state dictionary.
+     :rtype: dict(str: *)
+    """
+
     hosts_to_vms = vms_by_hosts(state['nova'], state['compute_hosts']) # [host, [vms]]
     vms_host = hosts_to_vms[host] #list of vms ids on host from which migrate
     other_hosts = [x for x in state['compute_hosts'] if x != host] #list of other host
 
     placement = {}
     vm_placement_state = {} #useless for now
-    for vm in vms_host #vm to migrate
-        rand_index = random.randint(0, len(other_hosts))
+    for vm in vms_host: #vm to migrate
+        rand_index = random.randint(0, len(other_hosts) - 1)
         rand_host = other_hosts[rand_index] #random host
-        mapping[vm] = rand_host
 
+	if log.isEnabledFor(logging.DEBUG):
+		log.debug("Random chosen host: %s", str(rand_host))
+
+        placement[vm] = rand_host
+
+    log.info("Starting migrations")
     migrate_vms(state['nova'], #migrate all vms to selected hosts
                 config['vm_instance_directory'],
                 placement)
+    log.info("Migrations completed")
 
     return state
 
@@ -625,29 +646,52 @@ def execute_overload(config, state, host, vm_uuids):
                             state['host_macs'],
                             hosts_to_activate)
         log.info('Started overload VM migrations')
-        migrate_vms(state['db'],
-                    state['nova'],
+        migrate_vms(state['nova'],
                     config['vm_instance_directory'],
-                    placement)
+                    placement,
+		    state['db'])
         log.info('Completed overload VM migrations')
     log.info('Completed processing an overload request')
     return state
 
 @contract
 def execute_overload_ceilometer(config, state, host, vm_uuids):
+    """
+    :param config: A config dictionary.
+     :type config: dict(str: *)
+
+    :param state: A state dictionary.
+     :type state: dict(str: *)
+
+    :param host: A host name.
+     :type host: str
+
+    :param vm_uuids: A list of VM UUIDs to migrate from the host.
+     :type vm_uuids: list(str)
+
+    :return: The updated state dictionary.
+     :rtype: dict(str: *)
+    """
+
     vms_host = vm_uuids #list of vms ids on host from which migrate
     other_hosts = [x for x in state['compute_hosts'] if x != host] #list of other host
 
     placement = {}
     vm_placement_state = {} #useless for now
-    for vm in vms_host #vm to migrate
-        rand_index = random.randint(0, len(other_hosts))
-        rand_host = other_hosts[rand_index] #random host
-        mapping[vm] = rand_host
+    for vm in vms_host: #vm to migrate
+        rand_index = random.randint(0, len(other_hosts) - 1)
+        
+	rand_host = other_hosts[rand_index] #random host
+	if log.isEnabledFor(logging.DEBUG):
+		log.debug("Random chosen host: %s", str(rand_host))
 
+        placement[vm] = rand_host
+
+    log.info("Starting migrations")
     migrate_vms(state['nova'], #migrate all vms to selected hosts
                 config['vm_instance_directory'],
                 placement)
+    log.info("Migrations completed")
 
     return state
 
@@ -777,14 +821,13 @@ def vm_hostname(vm):
     """
     return str(getattr(vm, 'OS-EXT-SRV-ATTR:host'))
 
-
 @contract
-def migrate_vms(db=None, nova, vm_instance_directory, placement):
+def migrate_vms(nova, vm_instance_directory, placement, db=None):
     """ Synchronously live migrate a set of VMs.
 
     :param db: The database object.
-     :type db: Database
-
+     :type db: *
+  
     :param nova: A Nova client.
      :type nova: *
 
@@ -818,7 +861,7 @@ def migrate_vms(db=None, nova, vm_instance_directory, placement):
                 if vm_hostname(vm) == placement[vm_uuid] and \
                     vm.status == u'ACTIVE':
                     vm_pair.remove(vm_uuid)
-                    if db is not None #None if using ceilometer
+                    if db is not None: #None if using ceilometer
                         db.insert_vm_migration(vm_uuid, placement[vm_uuid])
                     if log.isEnabledFor(logging.INFO):
                         log.info('Completed migration of VM %s to %s',
@@ -841,7 +884,7 @@ def migrate_vms(db=None, nova, vm_instance_directory, placement):
         if log.isEnabledFor(logging.INFO):
             log.info('Retrying the following migrations: %s',
                      str(retry_placement))
-        migrate_vms(db, nova, vm_instance_directory, retry_placement)
+        migrate_vms(nova, vm_instance_directory, retry_placement, db)
 
 
 @contract

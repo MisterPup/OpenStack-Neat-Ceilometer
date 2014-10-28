@@ -52,11 +52,11 @@ def start():
 
                 alarm_cpu_overload = ({'name':'cpu_' + cur_host + '_overload', 'description':cur_host + ' overloaded', 'meter_name':'compute.node.cpu.percent', 
                                 'threshold':70.0, 'comparison_operator':'gt', 'statistic':'avg', 'period':600, 'evaluation_periods':1,
-                                'alarm_actions':[web_hook_overload], 'matching_metadata':{'resource_id': cur_res_id}})
+                                'alarm_actions':[web_hook_overload], 'repeat_actions': True, 'matching_metadata':{'resource_id': cur_res_id}})
 
                 alarm_cpu_underload = ({'name':'cpu_' + cur_host + '_underload', 'description':cur_host + ' underloaded', 'meter_name':'compute.node.cpu.percent', 
                                 'threshold':20.0, 'comparison_operator':'lt', 'statistic':'avg', 'period':600, 'evaluation_periods':1,
-                                'alarm_actions':[web_hook_underload], 'matching_metadata':{'resource_id': cur_res_id}})
+                                'alarm_actions':[web_hook_underload], 'repeat_actions': True, 'matching_metadata':{'resource_id': cur_res_id}})
 
 
                 print alarm_cpu_overload

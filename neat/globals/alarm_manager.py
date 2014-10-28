@@ -67,16 +67,17 @@ def service_underload():
 		alarm = ceilo_client.alarms.get(alarm_id)
 		resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1 (host_node)
 		hostname = resource_id.split('_')[0] #compute1
-		alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
-		alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
-		alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
+		#alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
+		#alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
+		#alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
+		alarm_time_sec = time.time() #if repeat_action, than every minute a request is sent
 
 		#log
 		"""
 		Send information to global manager
 		"""
 		r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], {'username': state['hashed_username'],
-		'password': state['hashed_password'], 'time': time.time(), 'host': hostname, 'reason': 0})) #send request to global manager
+		'password': state['hashed_password'], 'ceilometer' : 1, 'time': time.time(), 'host': hostname, 'reason': 0})) #send request to global manager
     
 @bottle.post('/overload')
 def service_overload():
@@ -95,9 +96,10 @@ def service_overload():
 		alarm = ceilo_client.alarms.get(alarm_id) #recover alarm info
 		resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1
 		hostname = resource_id.split('_')[0] #get host from resource_id: compute1_compute1 -> compute1
-		alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
-		alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
-		alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
+		#alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
+		#alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
+		#alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
+		alarm_time_sec = time.time() #if repeat_action, than every minute a request is sent
 
 		#log
 		"""
@@ -146,7 +148,7 @@ def service_overload():
 		Send information to global manager
 		"""
 		r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], {'username': state['hashed_username'],
-				'password': state['hashed_password'], 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 'vm_uuids': ','.join(vm_uuids)}))
+				'password': state['hashed_password'], 'ceilometer' : 1, 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 'vm_uuids': ','.join(vm_uuids)}))
 
 @bottle.route('/', method='ANY')
 def error():
