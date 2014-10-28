@@ -225,17 +225,30 @@ def service():
     try:
         if params['reason'] == 0:
             log.info('Processing an underload of a host %s', params['host'])
-            execute_underload(
-                state['config'],
-                state['state'],
-                params['host'])
+            if 'ceilometer' not in params
+                execute_underload(
+                    state['config'],
+                    state['state'],
+                    params['host'])
+            else #request sent from alarm manager
+                execute_underload_ceilometer(
+                    state['config'],
+                    state['state'],
+                    params['host'])                
         else:
             log.info('Processing an overload, VMs: %s', str(params['vm_uuids']))
-            execute_overload(
-                state['config'],
-                state['state'],
-                params['host'],
-                params['vm_uuids'])
+            if 'ceilometer' not in params
+                execute_overload(
+                    state['config'],
+                    state['state'],
+                    params['host'],
+                    params['vm_uuids'])
+            else #request sent from alarm manager
+                execute_overload_ceilometer(
+                    state['config'],
+                    state['state'],
+                    params['host'],
+                    params['vm_uuids'])
     except:
         log.exception('Exception during request processing:')
         raise
@@ -440,6 +453,9 @@ def execute_underload(config, state, host):
     log.info('Completed processing an underload request')
     return state
 
+@contract
+def execute_underload_ceilometer(config, state, host):
+    execute_underload(config, state, host)
 
 @contract
 def execute_overload(config, state, host, vm_uuids):
@@ -596,6 +612,9 @@ def execute_overload(config, state, host, vm_uuids):
     log.info('Completed processing an overload request')
     return state
 
+@contract
+def execute_overload_ceilometer(config, state, host, vm_uuids):
+      execute_overload(config, state, host, vm_uuids)
 
 @contract
 def flavors_ram(nova):
