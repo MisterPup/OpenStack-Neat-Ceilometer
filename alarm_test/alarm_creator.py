@@ -43,25 +43,26 @@ def start():
         ceilo_client = (ceiloclient.get_client(2, username=keystone['username'], password=keystone['password'],
                          tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
 
-        web_hook = 'http://controller:9710/'
+        web_hook_overload = 'http://controller:9710/overload'
+	web_hook_underload = 'http://controller:9710/underload' 
     
         for count in range(0, len(resource_ids)): #create alarm for compute_hosts
                 cur_res_id = resource_ids[count]
                 cur_host = compute_hosts[count]
 
-                alarm_cpu_high = ({'name':'cpu_' + cur_host + '_high', 'description':cur_host + ' running hot', 'meter_name':'compute.node.cpu.percent', 
-                                'threshold':70.0, 'comparison-operator':'gt', 'statistic':'avg', 'period':600, 'evaluation-periods':1,
-                                'alarm_action':web_hook, 'query':{'resource_id': cur_res_id}})
+                alarm_cpu_overload = ({'name':'cpu_' + cur_host + '_overload', 'description':cur_host + ' overloaded', 'meter_name':'compute.node.cpu.percent', 
+                                'threshold':70.0, 'comparison_operator':'gt', 'statistic':'avg', 'period':600, 'evaluation_periods':1,
+                                'alarm_actions':[web_hook_overload], 'matching_metadata':{'resource_id': cur_res_id}})
 
-                alarm_cpu_low = ({'name':'cpu_' + cur_host + '_down', 'description':cur_host + ' running cold', 'meter_name':'compute.node.cpu.percent', 
-                                'threshold':20.0, 'comparison-operator':'lt', 'statistic':'avg', 'period':600, 'evaluation-periods':1,
-                                'alarm_action':web_hook, 'query':{'resource_id': cur_res_id}})
+                alarm_cpu_underload = ({'name':'cpu_' + cur_host + '_underload', 'description':cur_host + ' underloaded', 'meter_name':'compute.node.cpu.percent', 
+                                'threshold':20.0, 'comparison_operator':'lt', 'statistic':'avg', 'period':600, 'evaluation_periods':1,
+                                'alarm_actions':[web_hook_underload], 'matching_metadata':{'resource_id': cur_res_id}})
 
 
-                print  alarm_cpu_high
-                print alarm_cpu_low    
-                #ceilo_client.alarms.create(**alarm_cpu_high)
-                #ceilo_client.alarms.create(**alarm_cpu_low)
+                print alarm_cpu_overload
+                print alarm_cpu_underload
+                ceilo_client.alarms.create(**alarm_cpu_overload)
+                ceilo_client.alarms.create(**alarm_cpu_underload)
 
 start()
 #bottle.run(host='controller', port=9710)

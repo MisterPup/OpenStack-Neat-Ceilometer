@@ -1,5 +1,5 @@
 """
-Tester dei client nova e ceilometer
+Test vari sugli allarmi
 """
 
 from novaclient import client as novaclient
