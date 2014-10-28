@@ -24,6 +24,7 @@ from neat.config import *
 from contracts import contract
 import time
 from datetime import datetime
+from hashlib import sha1
 
 import bottle
 import requests

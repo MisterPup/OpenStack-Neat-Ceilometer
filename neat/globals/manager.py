@@ -76,6 +76,7 @@ import novaclient
 from novaclient.v1_1 import client
 import time
 import subprocess
+import random
 
 import neat.common as common
 from neat.config import *
@@ -230,7 +231,7 @@ def service():
                     state['config'],
                     state['state'],
                     params['host'])
-            else #request sent from alarm manager
+            else #request sent from alarm manager after underload alarm
                 execute_underload_ceilometer(
                     state['config'],
                     state['state'],
@@ -243,7 +244,7 @@ def service():
                     state['state'],
                     params['host'],
                     params['vm_uuids'])
-            else #request sent from alarm manager
+            else #request sent from alarm manager after overload alarm
                 execute_overload_ceilometer(
                     state['config'],
                     state['state'],
@@ -279,6 +280,11 @@ def init_state(config):
                                   config['os_admin_tenant_name'],
                                   config['os_auth_url'],
                                   service_type="compute"),
+            'ceilometer': ceiloclient.get_client(2, 
+                                    username=config['os_admin_user'],
+                                    password=config['os_admin_password'],
+                                    tenant_name=config['os_admin_tenant_name'],
+                                    auth_url=config['os_auth_url']),            
             'hashed_username': sha1(config['os_admin_user']).hexdigest(),
             'hashed_password': sha1(config['os_admin_password']).hexdigest(),
             'compute_hosts': common.parse_compute_hosts(
@@ -455,7 +461,22 @@ def execute_underload(config, state, host):
 
 @contract
 def execute_underload_ceilometer(config, state, host):
-    execute_underload(config, state, host)
+    hosts_to_vms = vms_by_hosts(state['nova'], state['compute_hosts']) # [host, [vms]]
+    vms_host = hosts_to_vms[host] #list of vms ids on host from which migrate
+    other_hosts = [x for x in state['compute_hosts'] if x != host] #list of other host
+
+    placement = {}
+    vm_placement_state = {} #useless for now
+    for vm in vms_host #vm to migrate
+        rand_index = random.randint(0, len(other_hosts))
+        rand_host = other_hosts[rand_index] #random host
+        mapping[vm] = rand_host
+
+    migrate_vms(state['nova'], #migrate all vms to selected hosts
+                config['vm_instance_directory'],
+                placement)
+
+    return state
 
 @contract
 def execute_overload(config, state, host, vm_uuids):
@@ -614,7 +635,21 @@ def execute_overload(config, state, host, vm_uuids):
 
 @contract
 def execute_overload_ceilometer(config, state, host, vm_uuids):
-      execute_overload(config, state, host, vm_uuids)
+    vms_host = vm_uuids #list of vms ids on host from which migrate
+    other_hosts = [x for x in state['compute_hosts'] if x != host] #list of other host
+
+    placement = {}
+    vm_placement_state = {} #useless for now
+    for vm in vms_host #vm to migrate
+        rand_index = random.randint(0, len(other_hosts))
+        rand_host = other_hosts[rand_index] #random host
+        mapping[vm] = rand_host
+
+    migrate_vms(state['nova'], #migrate all vms to selected hosts
+                config['vm_instance_directory'],
+                placement)
+
+    return state
 
 @contract
 def flavors_ram(nova):
@@ -744,7 +779,7 @@ def vm_hostname(vm):
 
 
 @contract
-def migrate_vms(db, nova, vm_instance_directory, placement):
+def migrate_vms(db=None, nova, vm_instance_directory, placement):
     """ Synchronously live migrate a set of VMs.
 
     :param db: The database object.
@@ -783,7 +818,8 @@ def migrate_vms(db, nova, vm_instance_directory, placement):
                 if vm_hostname(vm) == placement[vm_uuid] and \
                     vm.status == u'ACTIVE':
                     vm_pair.remove(vm_uuid)
-                    db.insert_vm_migration(vm_uuid, placement[vm_uuid])
+                    if db is not None #None if using ceilometer
+                        db.insert_vm_migration(vm_uuid, placement[vm_uuid])
                     if log.isEnabledFor(logging.INFO):
                         log.info('Completed migration of VM %s to %s',
                                  vm_uuid, placement[vm_uuid])
