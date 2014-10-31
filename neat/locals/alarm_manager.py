@@ -16,7 +16,6 @@
 Add description here
 """
 
-#add import here
 from novaclient import client as novaclient
 from ceilometerclient import client as ceiloclient
 from neat.config import *
@@ -54,10 +53,16 @@ def start():
 
 @bottle.post('/underload')
 def service_underload():
-	request = bottle.request
-	json = request.json
+	"""
+	Process an underloaded host request. 
+	Prepare data for global manager:
+		- name of underloaded host
+		- alarm received timestamp
+	"""
+	json = bottle.request.json
 
 	if not json is None:
+		log.info("Received underload request")
 		ceilo_client = state['ceilometer']
 
 		"""
@@ -78,13 +83,21 @@ def service_underload():
 		"""
 		r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], {'username': state['hashed_username'],
 		'password': state['hashed_password'], 'ceilometer' : 1, 'time': time.time(), 'host': hostname, 'reason': 0})) #send request to global manager
-    
+    	log.info("Underload request sent to global manager")
+
 @bottle.post('/overload')
 def service_overload():
-	request = bottle.request
-	json = request.json
+	"""
+	Process an overloaded host request. 
+	Prepare data for global manager:
+		- name of overloaded host
+		- alarm received timestamp
+		- selected vms to migrate
+	"""
+	json = bottle.request.json
 
 	if not json is None:
+		log.info("Received overload request")
 		nova_client = state['nova']
 		ceilo_client = state['ceilometer']
 
@@ -105,50 +118,70 @@ def service_overload():
 		"""
 		Recover list of vms in "alarmed" host
 		"""
-		all_vms = nova_client.servers.list()
+		all_vms = nova_client.servers.list() #list of vms (Server objects)
 		host_vms = [vm for vm in all_vms if getattr(vm, 'OS-EXT-SRV-ATTR:host') == hostname] #list of vms in "alarmed" host
 
 		"""
-		Recover allocated ram of vms
+		Recover allocated ram of vms (put in function)
 		"""
-		vms_ram = list() #list of {vm_id, vm_ram} tuples
+		vms_ram = dict() #dict(vm_id: vm_ram)
 		for vm in host_vms:
 			vm_id = vm.id #resource_id
 			#why does it return two samples? We take only the first one
 			vm_ram_sample = ceilo_client.samples.list(meter_name='memory', q=[{'field':'resource_id','op':'eq','value':vm_id}])[0]
 			vm_ram = getattr(vm_ram_sample, 'resource_metadata')['memory_mb']
-			vms_ram.append({'id': vm_id, 'ram': vm_ram})
-			
-		min_ram = min([vms_ram[x]['ram'] for x in range(0, len(vms_ram))]) #min allocated ram
-
+			vms_ram[vm_id] = vm_ram
 
 		"""
-		Select vm with minum allocated memory, and maximum cpu utilization
+		Recover average cpu utilization of vms (put in function)
 		"""
-		interval_cfg = 600 #ten minutes (read value from configuration file)
+		interval_cfg = 600 #ten minutes (read it from configuration file!)
 		start_sec = time.time() - interval_cfg
 		start_time = datetime.fromtimestamp(start_sec).strftime('%Y-%m-%dT%H:%M:%S')
 
-		selected_vm_id = '' #selected vm
-		max_avg_cpu_util = 0
-		for vm_ram in vms_ram:
-			if vm_ram['ram'] > min_ram:
-				continue
+		vms_avg_cpu_util = dict() #dict(vm_id: vm_avg_cpu_util)
+		for vm in host_vms:
+			vm_id = vm.id #resource_id
 			#get average cpu utilization of vm in the last ten minutes
-			vm_cpu_util_sample = ceilo_client.statistics.list(meter_name='cpu_util', q=[{'field':'timestamp','op':'lt','value':start_time}])[0]
-			vm_avg_cpu_util = getattr(vm_cpu_util_sample, 'avg')
-			if vm_avg_cpu_util > max_avg_cpu_util:
-				max_avg_cpu_util = vm_avg_cpu_util
-				selected_vm_id = vm_ram['id']
+			vm_cpu_util_stats = ceilo_client.statistics.list(meter_name='cpu_util', q=[{'field':'resource_id','op':'eq','value':vm_id}, {'field':'timestamp','op':'lt','value':start_time}])[0]
+			vm_avg_cpu_util = getattr(vm_cpu_util_stats, 'avg')
+			vms_avg_cpu_util[vm_id] = vm_avg_cpu_util
 
-		vm_uuids = list()
-        vm_uuids.append(selected_vm_id)
+		"""
+		Recover state information
+		"""
+		time_step = int(config['data_collector_interval']) #I don't use this information anymore
+		migration_time = common.calculate_migration_time(
+			vms_ram,
+			float(config['network_migration_bandwidth']))
+
+		if 'vm_selection' not in state:
+			vm_selection_params = common.parse_parameters(
+				config['algorithm_vm_selection_parameters'])
+			vm_selection = common.call_function_by_name(
+			config['algorithm_vm_selection_factory'],
+			[time_step,
+			 migration_time,
+			 vm_selection_params])
+			state['vm_selection'] = vm_selection
+			state['vm_selection_state'] = None
+		else:
+			vm_selection = state['vm_selection']
+
+		"""
+		Select vms to migrate
+		"""
+		log.info('Started VM selection')
+		vm_uuids, state['vm_selection_state'] = vm_selection(
+			vms_avg_cpu_util, vms_ram, state['vm_selection_state'])
+		log.info('Completed VM selection')
 		
 		"""
 		Send information to global manager
 		"""
 		r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], {'username': state['hashed_username'],
 				'password': state['hashed_password'], 'ceilometer' : 1, 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 'vm_uuids': ','.join(vm_uuids)}))
+		log.info("Overload request sent to global manager")
 
 @bottle.route('/', method='ANY')
 def error():

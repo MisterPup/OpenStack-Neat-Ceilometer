@@ -107,6 +107,26 @@ def minimum_migration_time_max_cpu_factory(time_step, migration_time, params):
 
 
 @contract
+def minimum_migration_time_max_average_cpu_factory(time_step, migration_time, params):
+    """ Creates the minimum migration time / max average CPU usage VM selection algorithm.
+
+    :param time_step: The length of the simulation time step in seconds.
+     :type time_step: int,>=0
+
+    :param migration_time: The VM migration time in time seconds.
+     :type migration_time: float,>=0
+
+    :param params: A dictionary containing the algorithm's parameters.
+     :type params: dict(str: *)   
+
+    :return: A function implementing the minimum migration time / max CPU VM selection.
+     :rtype: function
+    """
+    return lambda vms_avg_cpu_util, vms_ram, state=None: \
+        ([minimum_migration_time_max_average_cpu(vms_cpu,
+                                                 vms_ram)], {})
+
+@contract
 def minimum_migration_time(vms_ram):
     """ Selects the VM with the minimum RAM usage.
 
@@ -149,7 +169,6 @@ def random(vms_cpu):
     """
     return choice(vms_cpu.keys())
 
-
 @contract
 def minimum_migration_time_max_cpu(last_n, vms_cpu, vms_ram):
     """ Selects the VM with the minimum RAM and maximum CPU usage.
@@ -177,4 +196,30 @@ def minimum_migration_time_max_cpu(last_n, vms_cpu, vms_ram):
         if max_cpu < avg:
             max_cpu = avg
             selected_vm = vm
+    return selected_vm
+
+@contract
+def minimum_migration_time_max_average_cpu(vms_avg_cpu_util, vms_ram):
+    """ Selects the VM with the minimum RAM and maximum CPU usage.
+
+    :param vms_avg_cpu_util: A map of VM UUID and their CPU averate cpu utilization in the last interval.
+     :type vms_avg_cpu_util: dict(str: number)
+
+    :param vms_ram: A map of VM UUID and their allocated RAM.
+     :type vms_ram: dict(str: number)
+
+    :return: A VM to migrate from the host.
+     :rtype: str
+    """
+    selected_vm_id = None #selected vm
+    min_ram = min([vms_ram[x] for x in vms_ram]) #min allocated ram
+    max_avg_cpu_util = 0
+    for vm in vms_ram:
+        if vms_ram[vm] > min_ram:
+            continue
+        vm_avg_cpu_util = vms_avg_cpu_util[vm]
+        if vm_avg_cpu_util > max_avg_cpu_util:
+            max_avg_cpu_util = vm_avg_cpu_util
+            selected_vm_id = vm
+
     return selected_vm
