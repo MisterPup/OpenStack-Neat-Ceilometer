@@ -123,7 +123,7 @@ def minimum_migration_time_max_average_cpu_factory(time_step, migration_time, pa
      :rtype: function
     """
     return lambda vms_avg_cpu_util, vms_ram, state=None: \
-        ([minimum_migration_time_max_average_cpu(vms_cpu,
+        ([minimum_migration_time_max_average_cpu(vms_avg_cpu_util,
                                                  vms_ram)], {})
 
 @contract
@@ -211,7 +211,7 @@ def minimum_migration_time_max_average_cpu(vms_avg_cpu_util, vms_ram):
     :return: A VM to migrate from the host.
      :rtype: str
     """
-    selected_vm_id = None #selected vm
+    selected_vm = None #selected vm
     min_ram = min([vms_ram[x] for x in vms_ram]) #min allocated ram
     max_avg_cpu_util = 0
     for vm in vms_ram:
@@ -220,6 +220,6 @@ def minimum_migration_time_max_average_cpu(vms_avg_cpu_util, vms_ram):
         vm_avg_cpu_util = vms_avg_cpu_util[vm]
         if vm_avg_cpu_util > max_avg_cpu_util:
             max_avg_cpu_util = vm_avg_cpu_util
-            selected_vm_id = vm
+            selected_vm = vm
 
     return selected_vm

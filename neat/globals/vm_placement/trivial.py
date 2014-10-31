@@ -39,7 +39,7 @@ def random_factory(time_step, migration_time, params):
      :rtype: function
     """	
 
-	return lambda vms_migrate, hosts_dst, state=None: ([random(vms_migrate, hosts_dst)], {})
+    return lambda vms_migrate, hosts_dst, state=None: ([random(vms_migrate, hosts_dst)], {})
 
 @contract
 def random(vms_migrate, hosts_dst):

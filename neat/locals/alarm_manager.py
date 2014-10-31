@@ -18,7 +18,9 @@ Add description here
 
 from novaclient import client as novaclient
 from ceilometerclient import client as ceiloclient
+
 from neat.config import *
+import neat.common as common
 
 from contracts import contract
 import time
@@ -41,6 +43,7 @@ def start():
 						'alarm-manager.log',
 						int(config['log_level']))
 
+	state = init_state(config)
 	bottle.debug(True)
 	bottle.app().state = {
 		'config': config,
@@ -60,6 +63,8 @@ def service_underload():
 		- alarm received timestamp
 	"""
 	json = bottle.request.json
+	config = bottle.app().state['config']
+	state = bottle.app().state['state']
 
 	if not json is None:
 		log.info("Received underload request")
@@ -95,6 +100,8 @@ def service_overload():
 		- selected vms to migrate
 	"""
 	json = bottle.request.json
+	config = bottle.app().state['config']
+	state = bottle.app().state['state']
 
 	if not json is None:
 		log.info("Received overload request")
@@ -126,11 +133,11 @@ def service_overload():
 		"""
 		vms_ram = dict() #dict(vm_id: vm_ram)
 		for vm in host_vms:
-			vm_id = vm.id #resource_id
+			vm_id = str(vm.id) #resource_id
 			#why does it return two samples? We take only the first one
 			vm_ram_sample = ceilo_client.samples.list(meter_name='memory', q=[{'field':'resource_id','op':'eq','value':vm_id}])[0]
 			vm_ram = getattr(vm_ram_sample, 'resource_metadata')['memory_mb']
-			vms_ram[vm_id] = vm_ram
+			vms_ram[vm_id] = int(vm_ram)
 
 		"""
 		Recover average cpu utilization of vms (put in function)
@@ -141,9 +148,10 @@ def service_overload():
 
 		vms_avg_cpu_util = dict() #dict(vm_id: vm_avg_cpu_util)
 		for vm in host_vms:
-			vm_id = vm.id #resource_id
+			vm_id = str(vm.id) #resource_id
 			#get average cpu utilization of vm in the last ten minutes
-			vm_cpu_util_stats = ceilo_client.statistics.list(meter_name='cpu_util', q=[{'field':'resource_id','op':'eq','value':vm_id}, {'field':'timestamp','op':'lt','value':start_time}])[0]
+			#why does it return two statistics? 
+			vm_cpu_util_stats = ceilo_client.statistics.list(meter_name='cpu_util', q=[{'field':'resource_id','op':'eq','value':vm_id}, {'field':'timestamp','op':'gt','value':start_time}])[0]
 			vm_avg_cpu_util = getattr(vm_cpu_util_stats, 'avg')
 			vms_avg_cpu_util[vm_id] = vm_avg_cpu_util
 
@@ -202,8 +210,7 @@ def init_state(config):
 	"""
 	#do we need to add other parameters to state?
 	return {'previous_time': 0,
-			'db': init_db(config['sql_connection']),
-			'nova': client.Client(config['os_admin_user'],
+			'nova': novaclient.Client(3, config['os_admin_user'],
 								  config['os_admin_password'],
 								  config['os_admin_tenant_name'],
 								  config['os_auth_url'],
