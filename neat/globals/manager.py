@@ -736,6 +736,7 @@ def execute_overload_ceilometer(config, state, host, vm_uuids):
     inactive_hosts = [h for h in state['compute_hosts'] if not vms_hosts[h]] #list of hosts with empty list of vms
 
     hosts_to_activate = list(set(inactive_hosts).intersection(set(placement.values()))) #activate inactive host to which vms will be migrated
+    log.info("Hosts that must be activated %s", str(hosts_to_activate))
     if hosts_to_activate:
         switch_hosts_on(config['ether_wake_interface'],
                         state['host_macs'],

@@ -38,18 +38,18 @@ def random_factory(time_step, migration_time, params):
     :return: A function implementing the random VM placement algorithm.
      :rtype: function
     """	
-
-    return lambda vms_migrate, hosts_dst, state=None: ([random(vms_migrate, hosts_dst)], {})
+    random.seed()
+    return lambda vms_migrate, hosts_dst, state=None: (random_placement(vms_migrate, hosts_dst), {})
 
 @contract
-def random(vms_migrate, hosts_dst):
-    """ Rlgorithm for randomplacing VMs on hosts.
+def random_placement(vms_migrate, hosts_dst):
+    """ Algorithm for placing VMs on random hosts.
 
     :param vms_migrate: A list of VMs to migrate.
-     :type vms_migrate: list()
+     :type vms_migrate: list(str)
 
     :param hosts_dst: A list of possibile host destination for migration.
-     :type hosts_dst: list()
+     :type hosts_dst: list(str)
 
     :return: A map of VM UUIDs to host names.
      :rtype: dict(str: str)

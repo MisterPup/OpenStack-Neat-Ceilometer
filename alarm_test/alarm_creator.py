@@ -32,19 +32,11 @@ def start():
 
         resource_ids = ["_".join([host, host]) for host in compute_hosts] #resource_id of compute hosts
 
-        """
-        resource_ids = list()
-        for host in compute_hosts: #we can get them from the configurations file
-                res_id = "_".join([host, host]) #actually host_node
-                print res_id
-                resource_ids.append(res_id) #how to find host id?
-        """
-
         ceilo_client = (ceiloclient.get_client(2, username=keystone['username'], password=keystone['password'],
                          tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
 
-        web_hook_overload = 'http://controller:9710/overload'
-	web_hook_underload = 'http://controller:9710/underload' 
+        web_hook_overload = 'http://controller:60180/overload'
+	web_hook_underload = 'http://controller:60180/underload' 
     
         for count in range(0, len(resource_ids)): #create alarm for compute_hosts
                 cur_res_id = resource_ids[count]

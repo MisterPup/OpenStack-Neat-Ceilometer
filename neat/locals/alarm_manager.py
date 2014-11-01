@@ -128,6 +128,8 @@ def service_overload():
 		all_vms = nova_client.servers.list() #list of vms (Server objects)
 		host_vms = [vm for vm in all_vms if getattr(vm, 'OS-EXT-SRV-ATTR:host') == hostname] #list of vms in "alarmed" host
 
+		log.info("VMs on alarmed host '%s': %s", str(hostname), str([x.id for x in host_vms]))
+
 		"""
 		Recover allocated ram of vms (put in function)
 		"""
@@ -151,8 +153,9 @@ def service_overload():
 			vm_id = str(vm.id) #resource_id
 			#get average cpu utilization of vm in the last ten minutes
 			#why does it return two statistics? 
-			vm_cpu_util_stats = ceilo_client.statistics.list(meter_name='cpu_util', q=[{'field':'resource_id','op':'eq','value':vm_id}, {'field':'timestamp','op':'gt','value':start_time}])[0]
-			vm_avg_cpu_util = getattr(vm_cpu_util_stats, 'avg')
+			vm_cpu_util_stats = ceilo_client.statistics.list(meter_name='cpu_util', q=[{'field':'resource_id','op':'eq','value':vm_id}, {'field':'timestamp','op':'gt','value':start_time}])
+			log.debug("Stats of VM %s: %s", vm_id, str(vm_cpu_util_stats))
+			vm_avg_cpu_util = getattr(vm_cpu_util_stats[0], 'avg')
 			vms_avg_cpu_util[vm_id] = vm_avg_cpu_util
 
 		"""
