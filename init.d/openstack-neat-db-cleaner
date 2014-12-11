@@ -24,8 +24,7 @@
 
 suffix=db-cleaner
 prog=openstack-neat-$suffix
-#exec="/usr/bin/neat-$suffix"
-exec="/usr/local/bin/neat-$suffix"
+exec="/usr/bin/neat-$suffix"
 piddir="/var/run/neat"
 pidfile="$piddir/neat-$suffix.pid"
 logdir="/var/log/neat"

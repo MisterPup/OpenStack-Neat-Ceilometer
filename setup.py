@@ -64,8 +64,8 @@ accepted on August 2, 2012). Download:
 http://beloglazov.info/papers/2012-host-overload-detection-tpds.pdf
 """
 
-import distribute_setup
-distribute_setup.use_setuptools()
+#import distribute_setup
+#distribute_setup.use_setuptools()
 
 from setuptools import setup, find_packages
 
