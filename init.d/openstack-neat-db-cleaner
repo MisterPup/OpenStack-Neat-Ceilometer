@@ -22,6 +22,9 @@
 #. /etc/rc.d/init.d/functions
 . /lib/lsb/init-functions
 
+PYTHONPATH=/usr/lib/python2.7/site-packages
+export PYTHONPATH
+
 suffix=db-cleaner
 prog=openstack-neat-$suffix
 exec="/usr/bin/neat-$suffix"

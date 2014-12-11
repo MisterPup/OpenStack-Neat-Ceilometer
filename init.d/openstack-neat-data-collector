@@ -24,6 +24,9 @@
 #. /etc/rc.d/init.d/functions
 . /lib/lsb/init-functions
 
+PYTHONPATH=/usr/lib/python2.7/site-packages
+export PYTHONPATH
+
 suffix=data-collector
 prog=openstack-neat-$suffix
 exec="/usr/bin/neat-$suffix"

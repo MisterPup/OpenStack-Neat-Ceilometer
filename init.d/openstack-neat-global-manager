@@ -24,6 +24,9 @@
 #. /etc/rc.d/init.d/functions
 . /lib/lsb/init-functions
 
+PYTHONPATH=/usr/lib/python2.7/site-packages
+export PYTHONPATH
+
 suffix=global-manager
 prog=openstack-neat-$suffix
 exec="/usr/bin/neat-$suffix"

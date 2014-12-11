@@ -18,6 +18,9 @@
 #. /etc/rc.d/init.d/functions
 . /lib/lsb/init-functions
 
+PYTHONPATH=/usr/lib/python2.7/site-packages
+export PYTHONPATH
+
 suffix=alarm-manager
 prog=openstack-neat-$suffix
 exec="/usr/bin/neat-$suffix"
@@ -39,7 +42,6 @@ start() {
     mkdir -p $piddir
     mkdir -p $logdir
     mkdir -p $lockdir
-    #daemon --user root --pidfile $pidfile "$exec &>$logfile & echo \$! > $pidfile"
     start-stop-daemon --start --quiet --chuid root --make-pidfile --pidfile $pidfile --background --startas /bin/bash -- -c "exec $exec > $logfile 2>&1"
     retval=$?
     echo
@@ -49,7 +51,6 @@ start() {
 
 stop() {
     echo -n $"Stopping $prog: "
-    #killproc -p $pidfile $prog
     start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE
     retval=$?
     echo
