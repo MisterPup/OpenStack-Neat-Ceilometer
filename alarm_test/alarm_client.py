@@ -1,5 +1,5 @@
 """
-Client per simulare allarmi.
+Client per simulare l'arrivo di allarmi.
 Impostare l'id dell'allarme di overload
 """
 

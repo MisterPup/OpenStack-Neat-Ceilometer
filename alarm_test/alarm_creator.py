@@ -36,7 +36,7 @@ def start():
                          tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
 
         web_hook_overload = 'http://controller:60180/overload'
-	web_hook_underload = 'http://controller:60180/underload' 
+        web_hook_underload = 'http://controller:60180/underload' 
     
         for count in range(0, len(resource_ids)): #create alarm for compute_hosts
                 cur_res_id = resource_ids[count]
@@ -57,4 +57,3 @@ def start():
                 ceilo_client.alarms.create(**alarm_cpu_underload)
 
 start()
-#bottle.run(host='controller', port=9710)
