@@ -461,6 +461,116 @@ def execute_underload(config, state, host):
     return state
 
 @contract
+def get_hosts_cpu_frequency(ceilo, hosts):
+    """Get frequency of hosts.
+
+    :param ceilo: A Ceilo client.
+     :type ceilo: *
+
+    :param hosts: A set of hosts
+     :type hosts: list(str)
+
+    :return: A dictionary of (host, cpu_frequency)
+     :rtype: dict(str: *)
+    """
+    hosts_cpu_total = dict() #dict of (host, cpu_max_frequency)
+    for host in hosts:
+        host_id = "_".join([host, host])
+        hosts_cpu_total[host] = ceilo.samples.list(meter_name='compute.node.cpu.frequency', 
+            limit=1, q=[{'field':'resource_id','op':'eq','value':host_id}])[0]
+
+    return hosts_cpu_total
+
+@contract
+def get_hosts_cpu_usage(ceilo, hosts):
+    """Get Cpu usage of hosts.
+
+    :param ceilo: A Ceilo client.
+     :type ceilo: *
+
+    :param hosts: A set of hosts
+     :type hosts: list(str)
+
+    :return: A dictionary of (host, cpu_usage)
+     :rtype: dict(str: *)
+    """
+
+    hosts_cpu_usage = dict() #dict of (host, cpu_frequency_usage)
+    for host in hosts:
+        host_id = "_".join([host, host])
+        hosts_cpu_usage[host] = ceilo.samples.list(meter_name='compute.node.cpu.percent',
+            limit=1, q=[{'field':'resource_id','op':'eq','value':host_id}])[0]
+
+    return hosts_cpu_usage
+
+@contract
+def get_hosts_ram_total(nova, hosts):
+    """Get total RAM (free+used) of hosts.
+
+    :param nova: A Nova client
+     :type nova: *
+
+    :param hosts: A set of hosts
+     :type hosts: list(str)
+
+    :return: A dictionary of (host, total_ram)
+     :rtype: dict(str: *)
+    """
+
+    host_ram_total = dict() #dict of (host, total_ram)
+    for host in hosts:
+        data = nova.hosts.get(host)
+        host_ram_total[host] = data[0].memory_mb
+
+    return host_ram_total
+
+@contract
+def get_hosts_ram_usage(nova, hosts):
+    """Get RAM usage of hosts.
+
+    :param nova: A Nova client
+     :type nova: *
+
+    :param hosts: A set of hosts
+     :type hosts: list(str)
+
+    :return: A dictionary of (host, ram_usage)
+     :rtype: dict(str: *)
+    """
+
+    hosts_ram_usage = dict() #dict of (host, ram_usage)
+    for host in hosts:
+        hosts_ram_usage[host] = host_used_ram(nova, host)
+
+    return hosts_ram_usage
+
+def get_vms_last_cpu_util(nova, ceilo, hosts):
+    """Get CPU usage of vms.
+  
+    :param nova: A Nova client
+     :type nova: *
+
+    :param ceilo: A Ceilo client.
+     :type ceilo: *
+
+    :param hosts: A set of hosts
+     :type hosts: list(str)
+
+    :return: A dictionary of (vm, cpu_usage)
+     :rtype: dict(str: *)
+    """
+
+    vms_last_cpu_util = dict() #dict of (vm, ram_usage)
+    #dict(host: [vms])
+    vms_hosts = vms_by_hosts(nova, hosts) 
+    for vms in vms_hosts.values():
+        for vm in vms:
+            vms_last_cpu_util[vm] = ceilo.samples.list(meter_name='cpu_util', 
+                limite=1, q=[{'field':'resource_id','op':'eq','value':vm}])[0]
+
+    return vms_last_cpu_util
+
+@contract
 def execute_underload_ceilometer(config, state, host):
     """ Process an underloaded host: migrate all VMs from the host.
     Same as "execute_underload" except measures are collected by ceilometer.
@@ -476,6 +586,33 @@ def execute_underload_ceilometer(config, state, host):
 
     :return: The updated state dictionary.
      :rtype: dict(str: *)
+    """
+
+    """
+
+    ceilo_client = state['ceilometer']
+    nova = state['nova']
+    compute_hosts = state['compute_hosts']
+
+    #dict of (host, cpu_max_frequency)
+    hosts_cpu_total = get_hosts_frequency(ceilo_client, 
+                                          compute_hosts)
+    #dict of (host, cpu_frequency_usage)
+    hosts_cpu_usage = get_hosts_cpu_usage(ceilo_client, 
+                                          compute_hosts)
+    #dict of (host, ram_used)
+    hosts_ram_usage = get_hosts_ram_usage(nova, 
+                                          compute_hosts)
+    #dict of (host, total_ram)
+    host_ram_total = get_hosts_ram_total(nova, 
+                                          compute_hosts)
+    #dict(host: [vms])
+    vms_hosts = get_vms_last_cpu_util(nova, 
+                                      ceilo_client,
+                                      compute_hosts)
+    #dict(vm: ram_allocated)
+    vms_ram = vms_ram_limit(state['nova'], vms_to_migrate)
+
     """
 
     vms_hosts = vms_by_hosts(state['nova'], state['compute_hosts']) #dict(host: [vms])
