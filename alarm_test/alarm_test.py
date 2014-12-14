@@ -11,6 +11,13 @@ from datetime import datetime
 #from keystoneclient import session
 import bottle
 
+def host_used_ram(nova, host):
+    data = nova.hosts.get(host)
+    if len(data) > 2 and data[2].memory_mb != 0:
+        return data[2].memory_mb
+    return data[1].memory_mb
+
+
 def start():
 
         keystone = {}
@@ -28,22 +35,56 @@ def start():
     
         nova_client = (novaclient.Client(3, keystone['username'], keystone['password'], keystone['tenant_name'], 
                         keystone['auth_url'], service_type='compute'))
-
+		
 	hosts = nova_client.hosts.list()
+	for host in hosts:
+		print host.__dict__
+
+
 	compute_hosts = [host.host_name for host in hosts if host.service == 'compute']
-	print compute_hosts
+	print "COMPUTE_HOSTS: %s" % str(compute_hosts)
+
+	print host_used_ram(nova_client, "compute1")
+
+	compute1 = nova_client.hosts.get("compute1")
+	print "CLA"
+	print compute1
+	for c in compute1:
+		print c.__dict__
+
+	"""
 
 	resource_ids = ["_".join([host, host]) for host in compute_hosts]
-	print resource_ids
+	print "RESOURCE_IDS: %s" % str(resource_ids)
 
 	all_vms = nova_client.servers.list()
 	hostname = 'compute1'
 	host_vms = [vm for vm in all_vms if getattr(vm, 'OS-EXT-SRV-ATTR:host') == hostname]
-	print host_vms
+	print "VMS ON COMPUTE1: %s" % str(host_vms)
 
         ceilo_client = (ceiloclient.get_client(2, username=keystone['username'], password=keystone['password'],
                          tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
-	
+
+	host_cpu_total = dict() #dict of (host, cpu_max_frequency)
+	for host in resource_ids:
+		host_cpu_total[host] = ceilo_client.samples.list(meter_name='compute.node.cpu.frequency', 
+			limit=1, q=[{'field':'resource_id','op':'eq','value':host}])[0]
+		#print host_cpu_total[host]
+		#print ""
+
+	print "HOST_CPU_TOTAL: %s" % str(host_cpu_total)
+
+	hosts_cpu_usage = dict() #dict of (host, cpu_frequency_usage)
+	for host in resource_ids:
+		hosts_cpu_usage[host] = ceilo_client.samples.list(meter_name='compute.node.cpu.percent',
+			limit=1, q=[{'field':'resource_id','op':'eq','value':host}])[0]
+		#print hosts_cpu_usage[host]
+		#print ""
+
+	print "HOST_CPU_USAGE: %s" % str(hosts_cpu_usage)	
+
+	"""
+
 	"""
 	vms_ram = list()
 	for vm in host_vms:
@@ -85,6 +126,8 @@ def start():
 	print selected_vm_id
 	"""
 	
+	"""
+
         web_hook = 'http://controller:9710/'
     
         for count in range(0, len(resource_ids)):
@@ -100,8 +143,10 @@ def start():
                                 'alarm_action':web_hook, 'query':{'resource_id': cur_res_id}})
 
 
-                print  alarm_cpu_high
-                print alarm_cpu_low    
-                ceilo_client.alarms.create(**alarm_cpu_high)
-                ceilo_client.alarms.create(**alarm_cpu_low)
+                #print  alarm_cpu_high
+                #print alarm_cpu_low    
+                #ceilo_client.alarms.create(**alarm_cpu_high)
+                #ceilo_client.alarms.create(**alarm_cpu_low)
+
+	"""
 start()
