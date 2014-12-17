@@ -557,6 +557,7 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     #number of last cpu values to average
     last_n_vm_cpu = vm_placement_params['last_n_vm_cpu']
     #dict(vms: [cpu_usage])
+    #We have already checked that there is at least one sample per vm
     vms_cpu = get_vms_last_n_cpu_util(ceilo_client, vms_to_migrate,
                                       last_n_vm_cpu, True) 
     #dict(vm: ram_allocated)
@@ -619,59 +620,6 @@ def execute_underload_ceilometer(config, state, underloaded_host):
 
     log.info('Completed processing an underload request')
     return state
-
-    """
-
-    vms_hosts = vms_by_hosts(state['nova'], state['compute_hosts']) #dict(host: [vms])
-    vms_to_migrate = vms_hosts[underloaded_host] #list of vms on underloaded host, i.e. vms to migrate
-    other_hosts = [x for x in state['compute_hosts'] if x != underloaded_host] #list of other hosts
-    vms_ram = vms_ram_limit(state['nova'], vms_to_migrate) #dict(vm: allocated_ram)
-
-    time_step = int(config['data_collector_interval']) #I don't use this information anymore
-    migration_time = common.calculate_migration_time(
-        vms_ram,
-        float(config['network_migration_bandwidth']))
-
-    if 'vm_placement' not in state:
-        vm_placement_params = common.parse_parameters(
-            config['algorithm_vm_placement_parameters'])
-        vm_placement = common.call_function_by_name(
-            config['algorithm_vm_placement_factory'],
-            [time_step,
-             migration_time,
-             vm_placement_params])
-        state['vm_placement'] = vm_placement
-        state['vm_placement_state'] = None
-    else:
-        vm_placement = state['vm_placement']
-
-    log.info('Started underload VM placement')
-    placement, state['vm_placement_state'] = vm_placement(
-        vms_to_migrate, other_hosts, state['vm_placement_state']) #dict(vm: host)
-    log.info('Completed underload VM placement')
-
-    log.info('Underload: obtained a new placement %s', str(placement))
-
-    if not placement:
-        log.info('Nothing to migrate')
-    else:
-        log.info('Started underload VM migrations')
-        migrate_vms(state['nova'], #migrate vms to chosen hosts
-                    config['vm_instance_directory'],
-                    placement)
-        log.info('Completed underload VM migrations')
-
-    vms_hosts = vms_by_hosts(state['nova'], state['compute_hosts']) #updated vms to host information, after migrations
-    hosts_to_deactivate = [h for h in state['compute_hosts'] if not vms_hosts[h]] #list of hosts with empty list of vms, after migrations
-
-    if hosts_to_deactivate:
-        switch_hosts_off(config['sleep_command'], #switch off all hosts with no vms on them
-                         hosts_to_deactivate)
-
-    log.info('Completed processing an underload request')
-    return state
-
-    """
 
 @contract
 def execute_overload(config, state, host, vm_uuids):
@@ -829,7 +777,7 @@ def execute_overload(config, state, host, vm_uuids):
     return state
 
 @contract
-def execute_overload_ceilometer(config, state, host, vm_uuids):
+def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
     """Process an overloaded host: migrate the selected VMs from it.
     Same as "execute_overload" except measures are collected by ceilometer.
 
@@ -839,8 +787,8 @@ def execute_overload_ceilometer(config, state, host, vm_uuids):
     :param state: A state dictionary.
      :type state: dict(str: *)
 
-    :param host: A host name.
-     :type host: str
+    :param overloaded_host: A host name.
+     :type overloaded_host: str
 
     :param vm_uuids: A list of VM UUIDs to migrate from the host.
      :type vm_uuids: list(str)
@@ -849,9 +797,99 @@ def execute_overload_ceilometer(config, state, host, vm_uuids):
      :rtype: dict(str: *)
     """
 
-    vms_to_migrate = vm_uuids #list of vms on host from which migrate
-    other_hosts = [x for x in state['compute_hosts'] if x != host] #list of other host
-    vms_ram = vms_ram_limit(state['nova'], vms_to_migrate) #dict(vm: allocated_ram)
+    log.info('Started processing an overload request')
+    ceilo_client = state['ceilometer']
+    nova = state['nova']
+    compute_hosts = state['compute_hosts']
+    vm_placement_params = common.parse_parameters(
+        config['algorithm_vm_placement_parameters'])
+    
+    """Collect data for each hosts for vm_placement algorithm"""
+
+    #dict of (host, cpu_max_frequency)
+    hosts_cpu_total = get_hosts_cpu_frequency(ceilo_client, 
+                                              compute_hosts)
+    #dict of (host, cpu_frequency_usage)
+    hosts_cpu_usage = get_hosts_last_cpu_usage(ceilo_client, 
+                                               compute_hosts)
+    #dict of (host, total_ram)
+    hosts_ram_total = get_hosts_ram_total(nova, 
+                                         compute_hosts)
+    #dict of (host, ram_used)
+    hosts_ram_usage = get_hosts_ram_usage(nova, 
+                                          compute_hosts)
+
+    """Collect cpu util data for each vms"""
+    #dict(vm: last_cpu_util)
+    vms_last_cpu_util = get_vms_on_host_last_cpu_util(nova, 
+                                                      ceilo_client,
+                                                      compute_hosts)
+
+    """Keep info for host only if active and if we have data for each vm on it """
+    
+    active_hosts = [] #host with running vms
+    keep_active_hosts = [] #hosts with running vms without enough collected data
+    inactive_hosts = [] #host without running vms
+
+    inactive_hosts_cpu = {}
+    inactive_hosts_ram = {}
+
+    vms_hosts = vms_by_hosts(nova, compute_hosts) #dict(host: [vms])
+    log.debug('vms_hosts %(vms_hosts)s', {'vms_hosts':vms_hosts})
+
+    #classify every host as active, inactive, keep_active
+    for host, vms in vms_hosts.items():
+        if vms: #host with vms
+            for vm in vms:
+                #we haven't collected any data for this new vms
+                if vm not in vms_last_cpu_util:
+                    #no data for vm to migrate
+                    if vm in vm_uuids:
+                        log.info('No data yet for VM: %s - dropping the request', vm)
+                        log.info('Skipped an overload request')
+                        return state
+
+                    keep_active_hosts.append(host)
+                    #eliminate host without sufficient data from dicts
+                    del hosts_cpu_total[host]
+                    del hosts_cpu_usage[host]
+                    del hosts_ram_total[host]
+                    del hosts_ram_usage[host]
+
+                    break
+            else: #for cycle executed without break
+                active_hosts.append(host) #we have collected data for each vms on host
+        else: #host without vms
+            inactive_hosts.append(host)
+            inactive_hosts_cpu = hosts_cpu_total[host]
+            inactive_hosts_ram = hosts_ram_total[host]
+            #eliminate inactive host from dicts
+            del hosts_cpu_total[host]
+            del hosts_cpu_usage[host]
+            del hosts_ram_total[host]
+            del hosts_ram_usage[host]
+
+    #exclude the overloaded host
+    del hosts_cpu_total[overloaded_host]
+    del hosts_cpu_usage[overloaded_host]
+    del hosts_ram_total[overloaded_host]
+    del hosts_ram_usage[overloaded_host]
+
+    """For each vm to migrate, get last n cpu usage values and ram allocation"""
+
+    #updated list of vms on overloaded host
+    vms_overloaded_host = vms_by_hosts(nova, [overloaded_host])[overloaded_host]
+    #updated list of vms to migrate. We eliminate from the list, vm that have been deleted
+    vms_to_migrate = list(set(vm_uuids).intersection(set(vms_overloaded_host.values())))
+    #number of last cpu values to average
+    last_n_vm_cpu = vm_placement_params['last_n_vm_cpu']
+    #dict(vms: [cpu_usage])
+    vms_cpu = get_vms_last_n_cpu_util(ceilo_client, vms_to_migrate,
+                                      last_n_vm_cpu, True) 
+    #dict(vm: ram_allocated)
+    vms_ram = vms_ram_limit(nova, vms_to_migrate)
+
+    """Prepare parameters for vm_placement algorithm"""
 
     time_step = int(config['data_collector_interval']) #I don't use this information anymore
     migration_time = common.calculate_migration_time(
@@ -871,32 +909,37 @@ def execute_overload_ceilometer(config, state, host, vm_uuids):
     else:
         vm_placement = state['vm_placement']
 
+    """Start vm placement algorithm"""
+
     log.info('Started overload VM placement')
     placement, state['vm_placement_state'] = vm_placement(
-        vms_to_migrate, other_hosts, state['vm_placement_state']) #dict(vm: host),
+        hosts_cpu_usage, hosts_cpu_total,
+        hosts_ram_usage, hosts_ram_total,
+        inactive_hosts_cpu, inactive_hosts_ram,
+        vms_cpu, vms_ram,
+        state['vm_placement_state'])
     log.info('Completed overload VM placement')
 
-    log.info('Overload: obtained a new placement %s', str(placement))
+    log.info('overload: obtained a new placement %s', str(placement))
 
-    vms_hosts = vms_by_hosts(state['nova'], state['compute_hosts']) #updated vms to host information
-    inactive_hosts = [h for h in state['compute_hosts'] if not vms_hosts[h]] #list of hosts with empty list of vms
-
-    hosts_to_activate = list(set(inactive_hosts).intersection(set(placement.values()))) #activate inactive host to which vms will be migrated
-    log.info("Hosts that must be activated %s", str(hosts_to_activate))
-    if hosts_to_activate:
-        switch_hosts_on(config['ether_wake_interface'],
-                        state['host_macs'],
-                        hosts_to_activate)
+    """Migrate vms"""
 
     if not placement:
         log.info('Nothing to migrate')
     else:
+        #activate inactive host to which vms will be migrated
+        hosts_to_activate = list(
+            set(inactive_hosts_cpu.keys()).intersection(
+                set(placement.values())))
+        if hosts_to_activate:
+            switch_hosts_on(config['ether_wake_interface'],
+                            state['host_macs'],
+                            hosts_to_activate)
         log.info('Started overload VM migrations')
-        migrate_vms(state['nova'], #migrate vms to chosen hosts
+        migrate_vms(nova, #migrate vms to chosen hosts
                     config['vm_instance_directory'],
                     placement)
         log.info('Completed overload VM migrations')
-
     log.info('Completed processing an overload request')
     return state
 
