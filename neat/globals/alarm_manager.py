@@ -142,31 +142,36 @@ def service_overload():
             vm_ram_sample = ceilo_client.samples.list(meter_name='memory', q=[{'field':'resource_id','op':'eq','value':vm_id}])[0]
             vm_ram = getattr(vm_ram_sample, 'resource_metadata')['memory_mb']
             vms_ram[vm_id] = int(vm_ram)
+        log.debug('vms_ram: %(vms_ram)s', {'vms_ram':vms_ram})
 
         """
         Recover last n cpu utilization values (put in function)
         """
 
-        overload_detection_params = common.parse_parameters(
-            config['algorithm_overload_detection_parameters'])
+        vm_selection_params = common.parse_parameters(
+            config['algorithm_vm_selection_parameters'])
         #number of last cpu values to recover
-        last_n_vm_cpu = overload_detection_params['last_n_vm_cpu']
+        last_n = vm_selection_params['last_n']
+        log.debug('last_n_cpu: %(last)s', {'last':last_n})
+        log.debug('vms: %(host_vms)s', {'host_vms':host_vms})        
 
         vms_last_n_cpu_util = dict() #dict (vm, ram_usage)
-        for vm in vms:
+        for vm in host_vms:
+            vm_id = str(vm.id) #resource_id
             cpu_util_list = (
-                ceilo.samples.list(meter_name='cpu_util', 
-                                   limit=last_n_vm_cpu, 
+                ceilo_client.samples.list(meter_name='cpu_util', 
+                                   limit=last_n, 
                                    q=[{'field':'resource_id',
                                        'op':'eq',
-                                       'value':vm}]))
-    
-            if len(cpu_util_list) == last_n_vm_cpu:
-                vms_last_n_cpu_util[vm] = [sample.counter_volume for sample in cpu_util_list]
+                                       'value':vm_id}]))
+            log.debug('cpu_util_list: %(util)s - vm: %(vm)s', {'util':cpu_util_list, 'vm':vm_id}) 
+            if len(cpu_util_list) == last_n:
+                vms_last_n_cpu_util[vm_id] = [sample.counter_volume for sample in cpu_util_list]
             else:
                 log.info('No data yet for VM: %s - dropping the request', vm)
                 log.info('Skipped an overload request')
                 return state
+        log.debug('vms_last_n_cpu_util: %(last_cpu)s', {'last_cpu':[vm for vm in vms_last_n_cpu_util]})
 
         """
         Recover state information
@@ -175,6 +180,8 @@ def service_overload():
         migration_time = common.calculate_migration_time(
             vms_ram,
             float(config['network_migration_bandwidth']))
+
+        log.info('Loading VM selection parameters')
 
         if 'vm_selection' not in state:
             vm_selection_params = common.parse_parameters(

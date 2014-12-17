@@ -880,7 +880,7 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
     #updated list of vms on overloaded host
     vms_overloaded_host = vms_by_hosts(nova, [overloaded_host])[overloaded_host]
     #updated list of vms to migrate. We eliminate from the list, vm that have been deleted
-    vms_to_migrate = list(set(vm_uuids).intersection(set(vms_overloaded_host.values())))
+    vms_to_migrate = list(set(vm_uuids).intersection(set(vms_overloaded_host)))
     #number of last cpu values to average
     last_n_vm_cpu = vm_placement_params['last_n_vm_cpu']
     #dict(vms: [cpu_usage])

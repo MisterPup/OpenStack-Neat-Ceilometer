@@ -8,11 +8,14 @@ import simplejson as json
 
 host = 'controller'
 port = '60180'
-request_type = 'underload'
+#request_type = 'underload'
+request_type = 'overload'
 
 url = "http://" + host + ":" + port + "/" + request_type + "?blabla"
 
-alarm_id = "b41fa40f-1ac2-4cb6-9c9e-1acce7ae85aa"
+#alarm_id = "b41fa40f-1ac2-4cb6-9c9e-1acce7ae85aa"
+alarm_id = '59a2dd68-e944-4e7d-b558-b1faf4ebf37c'
+
 
 data = {"current": "alarm", "alarm_id": alarm_id, "reason": "Transition to alarm due to 1 samples outside threshold, most recent: 89.5589116865", "reason_data": {"count": 1, "most_recent": 89.558911686528027, "type": "threshold", "disposition": "outside"}, "previous": "insufficient data"}
 
