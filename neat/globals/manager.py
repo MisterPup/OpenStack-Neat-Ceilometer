@@ -378,7 +378,7 @@ def execute_underload(config, state, host):
         log.debug('Host CPU usage: %s', str(hosts_last_cpu))
         log.debug('Host total CPU usage: %s', str(hosts_cpu_usage))
 
-    vms_to_migrate = vms_by_host(state['nova'], underloaded_host)
+    vms_to_migrate = vms_by_hosts(state['nova'], [underloaded_host])
     vms_cpu = {}
     for vm in vms_to_migrate:
         if vm not in vms_last_cpu:
@@ -471,8 +471,8 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     :param state: A state dictionary.
      :type state: dict(str: *)
 
-    :param underload_host: A host name.
-     :type underload_host: str
+    :param underloaded_host: A host name.
+     :type underloaded_host: str
 
     :return: The updated state dictionary.
      :rtype: dict(str: *)
@@ -484,78 +484,85 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     compute_hosts = state['compute_hosts']
     vm_placement_params = common.parse_parameters(
         config['algorithm_vm_placement_parameters'])
-    #number of last cpu values to average
-    last_n_cpu = vm_placement_params['last_n_cpu']
-
+    
+    """Collect data for each hosts for vm_placement algorithm"""
 
     #dict of (host, cpu_max_frequency)
-    hosts_cpu_total = get_hosts_frequency(ceilo_client, 
-                                          compute_hosts)
-
+    hosts_cpu_total = get_hosts_cpu_frequency(ceilo_client, 
+                                              compute_hosts)
     #dict of (host, cpu_frequency_usage)
     hosts_cpu_usage = get_hosts_last_cpu_usage(ceilo_client, 
                                                compute_hosts)
     #dict of (host, total_ram)
-    host_ram_total = get_hosts_ram_total(nova, 
+    hosts_ram_total = get_hosts_ram_total(nova, 
                                          compute_hosts)
     #dict of (host, ram_used)
     hosts_ram_usage = get_hosts_ram_usage(nova, 
                                           compute_hosts)
-    #dict(vm: last_cpu_util)
-    vms_last_n_cpu_util = get_vms_last_n_cpu_util(nova, 
-                                      ceilo_client,
-                                      compute_hosts,
-                                      last_n_cpu)
-    #dict(vm: ram_allocated)
-    vms_ram = vms_ram_limit(nova, vms_to_migrate)
 
+    """Collect cpu util data for each vms"""
+    #dict(vm: last_cpu_util)
+    vms_last_cpu_util = get_vms_on_host_last_cpu_util(nova, 
+                                                      ceilo_client,
+                                                      compute_hosts)
+   
+    """Keep info for host only if active and if we have data for each vm on it """
+ 
     active_hosts = [] #host with running vms
     keep_active_hosts = [] #hosts with running vms without enough collected data
     inactive_hosts = [] #host without running vms
 
     vms_hosts = vms_by_hosts(nova, compute_hosts) #dict(host: [vms])
+    log.debug('vms_hosts %(vms_hosts)s', {'vms_hosts':vms_hosts})
+
     #classify every host as active, inactive, keep_active
     for host, vms in vms_hosts.items():
         if vms: #host with vms
             for vm in vms:
                 #we haven't collected any data for this new vms
-                if vm not in vms_last_n_cpu_util:
+                if vm not in vms_last_cpu_util:
                     if host == underloaded_host:
                         log.info('No data yet for VM: %s - dropping the request', vm)
                         log.info('Skipped an underload request')
                         return state
 
-                    keep_active_hosts.add(host)
+                    keep_active_hosts.append(host)
+                    #eliminate host without sufficient data from dicts
                     del hosts_cpu_total[host]
                     del hosts_cpu_usage[host]
-                    del host_ram_total[host]
+                    del hosts_ram_total[host]
                     del hosts_ram_usage[host]
 
                     break
             else: #for cycle executed without break
-                active_hosts.add(host) #we have collected data for each vms on host
+                active_hosts.append(host) #we have collected data for each vms on host
         else: #host without vms
-            inactive_hosts.add(host)
+            inactive_hosts.append(host)
+            #eliminate inactive host from dicts
             del hosts_cpu_total[host]
             del hosts_cpu_usage[host]
-            del host_ram_total[host]
+            del hosts_ram_total[host]
             del hosts_ram_usage[host]
 
     #exclude the underloaded host
     del hosts_cpu_total[underloaded_host]
     del hosts_cpu_usage[underloaded_host]
-    del host_ram_total[underloaded_host]
+    del hosts_ram_total[underloaded_host]
     del hosts_ram_usage[underloaded_host]
 
-    #updated list of vms on underloaded host, i.e. vms to migrate  
-    updated_vms_underloaded_host = vms_by_hosts(nova, [underloaded_host])[underloaded_host]
-    old_vms_underloaded_host = vms_hosts[underloaded_host]
+    """For each vm to migrate, get last n cpu usage values and ram allocation"""
 
-    #check that no vms have been canceled in the meantime
-    deleted_vms = old_vms_underloaded_host - updated_vms_underloaded_host
-    for vm in deleted_vms:
-        del vms_last_n_cpu_util[vm]
-        del vms_ram[vm]
+    #updated list of vms on underloaded host, i.e. vms to migrate  
+    vms_to_migrate = vms_by_hosts(nova, [underloaded_host])[underloaded_host]
+    #number of last cpu values to average
+    last_n_vm_cpu = vm_placement_params['last_n_vm_cpu']
+    #dict(vms: [cpu_usage])
+    vms_cpu = get_vms_last_n_cpu_util(ceilo_client, vms_to_migrate,
+                                      last_n_vm_cpu, True) 
+    #dict(vm: ram_allocated)
+    vms_ram = vms_ram_limit(nova, vms_to_migrate)
+
+    """Prepare parameters for vm_placement algorithm"""
 
     time_step = int(config['data_collector_interval']) #I don't use this information anymore
     migration_time = common.calculate_migration_time(
@@ -575,16 +582,20 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     else:
         vm_placement = state['vm_placement']
 
+    """Start vm placement algorithm"""
+
     log.info('Started underload VM placement')
     placement, state['vm_placement_state'] = vm_placement(
         hosts_cpu_usage, hosts_cpu_total,
         hosts_ram_usage, hosts_ram_total,
         {}, {},
         vms_cpu, vms_ram,
-        vm_placement_state)
+        state['vm_placement_state'])
     log.info('Completed underload VM placement')
 
     log.info('Underload: obtained a new placement %s', str(placement))
+
+    """Migrate vms"""
 
     if not placement:
         log.info('Nothing to migrate')
@@ -595,8 +606,12 @@ def execute_underload_ceilometer(config, state, underloaded_host):
                     placement)
         log.info('Completed underload VM migrations')
 
-    vms_hosts = vms_by_hosts(nova, compute_hosts) #updated vms to host information, after migrations
-    hosts_to_deactivate = [h for h in compute_hosts if not vms_hosts[h]] #list of hosts without vms after migrations
+    """Deactivate host with no vms after migration"""
+
+    vms_hosts = vms_by_hosts(nova, 
+                             compute_hosts) #updated vms to host information, after migrations
+    hosts_to_deactivate = ([h for h in compute_hosts 
+                            if not vms_hosts[h]]) #list of hosts without vms after migrations
 
     if hosts_to_deactivate:
         switch_hosts_off(config['sleep_command'], #switch off all hosts with no vms on them
@@ -887,7 +902,7 @@ def execute_overload_ceilometer(config, state, host, vm_uuids):
 
 @contract
 def get_hosts_cpu_frequency(ceilo, hosts):
-    """Get cpu frequency of hosts.
+    """Get cpu frequency for each host in hosts.
 
     :param ceilo: A Ceilo client.
      :type ceilo: *
@@ -904,7 +919,7 @@ def get_hosts_cpu_frequency(ceilo, hosts):
         cpu_frequency_list = ceilo.samples.list(meter_name='compute.node.cpu.frequency', 
             limit=1, q=[{'field':'resource_id','op':'eq','value':host_id}])
         if cpu_frequency_list:
-            hosts_cpu_total[host] = cpu_frequency_list[0]..counter_volume
+            hosts_cpu_total[host] = cpu_frequency_list[0].counter_volume
 
     return hosts_cpu_total
 
@@ -950,12 +965,12 @@ def get_hosts_ram_total(nova, hosts):
      :rtype: dict(str: *)
     """
 
-    host_ram_total = dict() #dict of (host, total_ram)
+    hosts_ram_total = dict() #dict of (host, total_ram)
     for host in hosts:
         data = nova.hosts.get(host)
-        host_ram_total[host] = data[0].memory_mb
+        hosts_ram_total[host] = data[0].memory_mb
 
-    return host_ram_total
+    return hosts_ram_total
 
 @contract
 def get_hosts_ram_usage(nova, hosts):
@@ -977,8 +992,8 @@ def get_hosts_ram_usage(nova, hosts):
 
     return hosts_ram_usage
 
-def get_vms_last_n_cpu_util(nova, ceilo, hosts, last_n_cpu):
-    """Get CPU usage of vms.
+def get_vms_on_host_last_cpu_util(nova, ceilo, hosts):
+    """Get last cpu usage for each vm on each host.
   
     :param nova: A Nova client
      :type nova: *
@@ -989,28 +1004,53 @@ def get_vms_last_n_cpu_util(nova, ceilo, hosts, last_n_cpu):
     :param hosts: A set of hosts
      :type hosts: list(str)
 
-    :param last_n_cpu: Number of last cpu values to average
-     :type last_n_cpu: int
-
     :return: A dictionary of (vm, cpu_usage)
      :rtype: dict(str: *)
     """
 
-    vms_last_cpu_util = dict() #dict of (vm, ram_usage)
-    #dict(host: [vms])
-    vms_hosts = vms_by_hosts(nova, hosts) 
+    vms_last_cpu_util = dict() #dict of (vm, cpu_usage)
+    vms_hosts = vms_by_hosts(nova, hosts) #dict(host: [vms])
     for vms in vms_hosts.values():
-        for vm in vms:
-            cpu_util_list = (
-                ceilo.samples.list(meter_name='cpu_util', 
-                                   limit=last_n_cpu, 
-                                   q=[{'field':'resource_id',
-                                       'op':'eq',
-                                       'value':vm}]))
-            #we have collected least last_n_cpu samples
-            if len(cpu_util_list) == last_n_cpu:
-                vms_last_cpu_util[vm] = (
-                    sum([sample.counter_volume for sample in cpu_util_list])/last_n_cpu)
+        cur_host_vms_last_cpu_util = get_vms_last_n_cpu_util(ceilo, vms)
+        for vm in cur_host_vms_last_cpu_util.keys():
+            vms_last_cpu_util[vm] = cur_host_vms_last_cpu_util[vm]
+
+    return vms_last_cpu_util
+
+def get_vms_last_n_cpu_util(ceilo, vms, last_n_cpu=1, integer=False):
+    """Get last n cpu usage values for each vm in vms.
+
+    :param ceilo: A Ceilo client.
+     :type ceilo: *
+
+    :param vms: A set of vms
+     :type vms: list(str)
+
+    :param last_n_cpu: Number of last cpu values to recover
+     :type last_n_cpu: int
+
+    :param integer: Boolean telling if we want data as integer or float
+     :type integer: bool
+
+    :return: A dictionary of (vm, [cpu_usage])
+     :rtype: dict(str: *)
+    """
+
+    vms_last_cpu_util = dict() #dict of (vm, ram_usage)
+    for vm in vms:
+        cpu_util_list = (
+            ceilo.samples.list(meter_name='cpu_util', 
+                               limit=last_n_cpu, 
+                               q=[{'field':'resource_id',
+                                   'op':'eq',
+                                   'value':vm}]))
+    
+        #we have collected at least last_n_cpu samples for current vm
+        if len(cpu_util_list) == last_n_cpu:
+            if integer:
+                vms_last_cpu_util[vm] = [int(sample.counter_volume) for sample in cpu_util_list]
+            else:
+                vms_last_cpu_util[vm] = [sample.counter_volume for sample in cpu_util_list]
 
     return vms_last_cpu_util
 
@@ -1091,24 +1131,6 @@ def host_mac(host):
         return ''
     return mac
 
-
-@contract
-def vms_by_host(nova, host):
-    """ Get VMs from the specified host using the Nova API.
-
-    :param nova: A Nova client.
-     :type nova: *
-
-    :param host: A host name.
-     :type host: str
-
-    :return: A list of VM UUIDs from the specified host.
-     :rtype: list(str)
-    """
-    return [str(vm.id) for vm in nova.servers.list()
-            if vm_hostname(vm) == host]
-
-
 @contract
 def vms_by_hosts(nova, hosts):
     """ Get a map of host names to VMs using the Nova API.
@@ -1124,7 +1146,9 @@ def vms_by_hosts(nova, hosts):
     """
     result = dict((host, []) for host in hosts)
     for vm in nova.servers.list():
-        result[vm_hostname(vm)].append(str(vm.id))
+        hostname = vm_hostname(vm)
+        if hostname in result.keys():
+            result[hostname].append(str(vm.id))
     return result
 
 

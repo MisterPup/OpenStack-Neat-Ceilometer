@@ -189,6 +189,29 @@ def vm_hostname(vm):
     """
     return str(getattr(vm, 'OS-EXT-SRV-ATTR:host'))
 
+def create_alarm(resource_ids, must_print=False, must_create=False):
+    web_hook = 'http://controller:9710/'
+    
+    for count in range(0, len(resource_ids)):
+        cur_res_id = resource_ids[count]
+        cur_host = compute_hosts[count]
+
+        alarm_cpu_high = ({'name':'cpu_' + cur_host + '_high', 'description':cur_host + ' running hot', 'meter_name':'compute.node.cpu.percent', 
+                           'threshold':70.0, 'comparison-operator':'gt', 'statistic':'avg', 'period':600, 'evaluation-periods':1,
+                           'alarm_action':web_hook, 'query':{'resource_id': cur_res_id}})
+
+        alarm_cpu_low = ({'name':'cpu_' + cur_host + '_down', 'description':cur_host + ' running cold', 'meter_name':'compute.node.cpu.percent', 
+                          'threshold':20.0, 'comparison-operator':'lt', 'statistic':'avg', 'period':600, 'evaluation-periods':1,
+                          'alarm_action':web_hook, 'query':{'resource_id': cur_res_id}})
+
+    if must_print:
+        print alarm_cpu_high
+        print alarm_cpu_low
+    if must_create:
+        ceilo_client.alarms.create(**alarm_cpu_high)
+        ceilo_client.alarms.create(**alarm_cpu_low)
+
+
 def start():
 
         keystone = {}

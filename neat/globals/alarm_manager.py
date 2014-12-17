@@ -40,8 +40,8 @@ def start():
 										REQUIRED_FIELDS)
 
 	common.init_logging(config['log_directory'],
-						'alarm-manager.log',
-						int(config['log_level']))
+			    'alarm-manager.log',
+			    int(config['log_level']))
 
 	state = init_state(config)
 	bottle.debug(True)
@@ -67,13 +67,15 @@ def service_underload():
 	state = bottle.app().state['state']
 
 	if not json is None:
-		log.info("Received underload request")
+		log.info('Received underload request')
 		ceilo_client = state['ceilometer']
 
 		"""
 		Recover alarm info
 		"""
-		alarm_id = json.get('alarm_id')		
+		alarm_id = json.get('alarm_id')
+		log.info('Underload alarm id: %(id)s', {'id':alarm_id})	
+
 		alarm = ceilo_client.alarms.get(alarm_id)
 		resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1 (host_node)
 		hostname = resource_id.split('_')[0] #compute1
@@ -82,7 +84,7 @@ def service_underload():
 		#alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
 		alarm_time_sec = time.time() #if repeat_action, than every minute a request is sent
 
-		#log
+		log.info("Sending request to global manager")
 		"""
 		Send information to global manager
 		"""
