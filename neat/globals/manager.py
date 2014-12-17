@@ -1060,7 +1060,7 @@ def get_vms_on_host_last_cpu_util(nova, ceilo, hosts):
 
     return vms_last_cpu_util
 
-def get_vms_last_n_cpu_util(ceilo, vms, last_n_cpu=1, integer=False):
+def get_vms_last_n_cpu_util(ceilo, vms, last_n_vm_cpu=1, integer=False):
     """Get last n cpu usage values for each vm in vms.
 
     :param ceilo: A Ceilo client.
@@ -1069,8 +1069,8 @@ def get_vms_last_n_cpu_util(ceilo, vms, last_n_cpu=1, integer=False):
     :param vms: A set of vms
      :type vms: list(str)
 
-    :param last_n_cpu: Number of last cpu values to recover
-     :type last_n_cpu: int
+    :param last_n_vm_cpu: Number of last cpu values to recover
+     :type last_n_vm_cpu: int
 
     :param integer: Boolean telling if we want data as integer or float
      :type integer: bool
@@ -1079,17 +1079,17 @@ def get_vms_last_n_cpu_util(ceilo, vms, last_n_cpu=1, integer=False):
      :rtype: dict(str: *)
     """
 
-    vms_last_cpu_util = dict() #dict of (vm, ram_usage)
+    vms_last_cpu_util = dict() #dict of (vm, [cpu_util])
     for vm in vms:
         cpu_util_list = (
             ceilo.samples.list(meter_name='cpu_util', 
-                               limit=last_n_cpu, 
+                               limit=last_n_vm_cpu, 
                                q=[{'field':'resource_id',
                                    'op':'eq',
                                    'value':vm}]))
     
-        #we have collected at least last_n_cpu samples for current vm
-        if len(cpu_util_list) == last_n_cpu:
+        #we have collected at least last_n_vm_cpu samples for current vm
+        if len(cpu_util_list) == last_n_vm_cpu:
             if integer:
                 vms_last_cpu_util[vm] = [int(sample.counter_volume) for sample in cpu_util_list]
             else:
