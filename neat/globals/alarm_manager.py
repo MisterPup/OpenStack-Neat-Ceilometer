@@ -68,6 +68,7 @@ def service_underload():
 
     if not json is None:
         log.info('Received underload request')
+        nova_client = state['nova']
         ceilo_client = state['ceilometer']
 
         """
@@ -78,16 +79,20 @@ def service_underload():
 
         alarm = ceilo_client.alarms.get(alarm_id)
         resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1 (host_node)
-        hostname = resource_id.split('_')[0] #compute1
+        hostname = resource_id.split('_')[1] #compute1
+        hostname = hostname.encode('ascii','ignore') 
         #alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
         #alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
         #alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
         #if repeat_action, and state is still "alarmed", than every minute a request is sent
         alarm_time_sec = time.time()
 
+        """
+        Check if this is the first time sending the same underload request
+        """
         #list of vms in "alarmed" host
-        host_vms = vms_by_hosts(nova_client, 
-                                [hostname])[hostname]
+        host_vms = common.vms_by_hosts(nova_client, 
+                                       [hostname])[hostname]
 
         """
         If 'repeat_action' attribute of alarm is set to True
@@ -135,7 +140,8 @@ def service_overload():
         alarm_id = json.get('alarm_id')
         alarm = ceilo_client.alarms.get(alarm_id) #recover alarm info
         resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1
-        hostname = resource_id.split('_')[0] #get host from resource_id: compute1_compute1 -> compute1
+        hostname = resource_id.split('_')[1] #get host from resource_id: compute1_compute1 -> compute1
+        hostname = hostname.encode('ascii','ignore')
         #alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
         #alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
         #alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
@@ -147,15 +153,15 @@ def service_overload():
         Recover list of vms in "alarmed" host
         """
         #list of vms in "alarmed" host
-        host_vms = vms_by_hosts(nova_client, 
-                                [hostname])[hostname]
+        host_vms = common.vms_by_hosts(nova_client, 
+                                       [hostname])[hostname]
         log.info("VMs on alarmed host '%(name)s': %(vms)s", {'name':hostname, 'vms':host_vms})
 
         """
         Recover allocated ram of vms (put in function)
         """
         #dict(vm_id: vm_ram)
-        vms_ram = vms_ram_limit(nova, host_vms)
+        vms_ram = common.vms_ram_limit(nova_client, host_vms)
         log.debug('vms_ram: %(vms_ram)s', {'vms_ram':vms_ram})
 
         """
@@ -168,10 +174,10 @@ def service_overload():
         log.debug('last_n_cpu: %(last)s', {'last':last_n})     
 
         #dict(vm: [cpu_usage])
-        vms_last_n_cpu_util = get_vms_last_n_cpu_util(ceilo_client, 
-                                                      host_vms,
-                                                      last_n_vm_cpu,
-                                                      True)
+        vms_last_n_cpu_util = common.get_vms_last_n_cpu_util(ceilo_client, 
+                                                             host_vms,
+                                                             last_n,
+                                                             True)
 
         #check that there are enough data for each vms
         for vm in vms_last_n_cpu_util:

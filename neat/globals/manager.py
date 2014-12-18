@@ -323,7 +323,7 @@ def execute_underload(config, state, host):
     underloaded_host = host
     hosts_cpu_total, _, hosts_ram_total = state['db'].select_host_characteristics()
 
-    hosts_to_vms = vms_by_hosts(state['nova'], state['compute_hosts'])
+    hosts_to_vms = common.vms_by_hosts(state['nova'], state['compute_hosts'])
     vms_last_cpu = state['db'].select_last_cpu_mhz_for_vms()
     hosts_last_cpu = state['db'].select_last_cpu_mhz_for_hosts()
 
@@ -378,8 +378,8 @@ def execute_underload(config, state, host):
         log.debug('Host CPU usage: %s', str(hosts_last_cpu))
         log.debug('Host total CPU usage: %s', str(hosts_cpu_usage))
 
-    vms_to_migrate = vms_by_hosts(state['nova'], 
-                                  [underloaded_host])[underloaded_host]
+    vms_to_migrate = common.vms_by_hosts(state['nova'], 
+                                         [underloaded_host])[underloaded_host]
     vms_cpu = {}
     for vm in vms_to_migrate:
         if vm not in vms_last_cpu:
@@ -389,7 +389,7 @@ def execute_underload(config, state, host):
         vms_cpu[vm] = state['db'].select_cpu_mhz_for_vm(
             vm,
             int(config['data_collector_data_length']))
-    vms_ram = vms_ram_limit(state['nova'], vms_to_migrate)
+    vms_ram = common.vms_ram_limit(state['nova'], vms_to_migrate)
 
     # Remove VMs that are not in vms_ram
     # These instances might have been deleted
@@ -503,9 +503,9 @@ def execute_underload_ceilometer(config, state, underloaded_host):
 
     """Collect cpu util data for each vms"""
     #dict(vm: last_cpu_util)
-    vms_last_cpu_util = get_vms_on_host_last_cpu_util(nova, 
-                                                      ceilo_client,
-                                                      compute_hosts)
+    vms_last_cpu_util = get_vms_on_hosts_last_cpu_util(nova, 
+                                                       ceilo_client,
+                                                       compute_hosts)
    
     """Keep info for host only if active and if we have data for each vm on it """
  
@@ -513,7 +513,7 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     keep_active_hosts = [] #hosts with running vms without enough collected data
     inactive_hosts = [] #host without running vms
 
-    vms_hosts = vms_by_hosts(nova, compute_hosts) #dict(host: [vms])
+    vms_hosts = common.vms_by_hosts(nova, compute_hosts) #dict(host: [vms])
     log.debug('vms_hosts %(vms_hosts)s', {'vms_hosts':vms_hosts})
 
     #classify every host as active, inactive, keep_active
@@ -554,15 +554,18 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     """For each vm to migrate, get last n cpu usage values and ram allocation"""
 
     #updated list of vms on underloaded host, i.e. vms to migrate  
-    vms_to_migrate = vms_by_hosts(nova, [underloaded_host])[underloaded_host]
+    vms_to_migrate = common.vms_by_hosts(nova, 
+                                         [underloaded_host])[underloaded_host]
     #number of last cpu values to average
     last_n_vm_cpu = vm_placement_params['last_n_vm_cpu']
     #dict(vms: [cpu_usage])
     #We have already checked that there is at least one sample per vm
-    vms_cpu = get_vms_last_n_cpu_util(ceilo_client, vms_to_migrate,
-                                      last_n_vm_cpu, True) 
+    vms_cpu = common.get_vms_last_n_cpu_util(ceilo_client, 
+                                             vms_to_migrate,
+                                             last_n_vm_cpu, 
+                                             True) 
     #dict(vm: ram_allocated)
-    vms_ram = vms_ram_limit(nova, vms_to_migrate)
+    vms_ram = common.vms_ram_limit(nova, vms_to_migrate)
 
     """Prepare parameters for vm_placement algorithm"""
 
@@ -610,8 +613,8 @@ def execute_underload_ceilometer(config, state, underloaded_host):
 
     """Deactivate host with no vms after migration"""
 
-    vms_hosts = vms_by_hosts(nova, 
-                             compute_hosts) #updated vms to host information, after migrations
+    vms_hosts = common.vms_by_hosts(nova, 
+                                    compute_hosts) #updated vms to host information, after migrations
     hosts_to_deactivate = ([h for h in compute_hosts 
                             if not vms_hosts[h]]) #list of hosts without vms after migrations
 
@@ -654,7 +657,7 @@ def execute_overload(config, state, host, vm_uuids):
     log.info('Started processing an overload request')
     overloaded_host = host
     hosts_cpu_total, _, hosts_ram_total = state['db'].select_host_characteristics()
-    hosts_to_vms = vms_by_hosts(state['nova'], state['compute_hosts'])
+    hosts_to_vms = common.vms_by_hosts(state['nova'], state['compute_hosts'])
     vms_last_cpu = state['db'].select_last_cpu_mhz_for_vms()
     hosts_last_cpu = state['db'].select_last_cpu_mhz_for_hosts()
 
@@ -712,7 +715,7 @@ def execute_overload(config, state, host, vm_uuids):
         vms_cpu[vm] = state['db'].select_cpu_mhz_for_vm(
             vm,
             int(config['data_collector_data_length']))
-    vms_ram = vms_ram_limit(state['nova'], vms_to_migrate)
+    vms_ram = common.vms_ram_limit(state['nova'], vms_to_migrate)
 
     # Remove VMs that are not in vms_ram
     # These instances might have been deleted
@@ -822,7 +825,7 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
 
     """Collect cpu util data for each vms"""
     #dict(vm: last_cpu_util)
-    vms_last_cpu_util = get_vms_on_host_last_cpu_util(nova, 
+    vms_last_cpu_util = get_vms_on_hosts_last_cpu_util(nova, 
                                                       ceilo_client,
                                                       compute_hosts)
 
@@ -835,7 +838,7 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
     inactive_hosts_cpu = {}
     inactive_hosts_ram = {}
 
-    vms_hosts = vms_by_hosts(nova, compute_hosts) #dict(host: [vms])
+    vms_hosts = common.vms_by_hosts(nova, compute_hosts) #dict(host: [vms])
     log.debug('vms_hosts %(vms_hosts)s', {'vms_hosts':vms_hosts})
 
     #classify every host as active, inactive, keep_active
@@ -879,16 +882,18 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
     """For each vm to migrate, get last n cpu usage values and ram allocation"""
 
     #updated list of vms on overloaded host
-    vms_overloaded_host = vms_by_hosts(nova, [overloaded_host])[overloaded_host]
+    vms_overloaded_host = common.vms_by_hosts(nova, [overloaded_host])[overloaded_host]
     #updated list of vms to migrate. We eliminate from the list, vm that have been deleted
     vms_to_migrate = list(set(vm_uuids).intersection(set(vms_overloaded_host)))
     #number of last cpu values to average
     last_n_vm_cpu = vm_placement_params['last_n_vm_cpu']
     #dict(vms: [cpu_usage])
-    vms_cpu = get_vms_last_n_cpu_util(ceilo_client, vms_to_migrate,
-                                      last_n_vm_cpu, True) 
+    vms_cpu = common.get_vms_last_n_cpu_util(ceilo_client, 
+                                             vms_to_migrate,
+                                             last_n_vm_cpu, 
+                                             True) 
     #dict(vm: ram_allocated)
-    vms_ram = vms_ram_limit(nova, vms_to_migrate)
+    vms_ram = common.vms_ram_limit(nova, vms_to_migrate)
 
     """Prepare parameters for vm_placement algorithm"""
 
@@ -1036,7 +1041,7 @@ def get_hosts_ram_usage(nova, hosts):
 
     return hosts_ram_usage
 
-def get_vms_on_host_last_cpu_util(nova, ceilo, hosts):
+def get_vms_on_hosts_last_cpu_util(nova, ceilo, hosts):
     """Get last cpu usage for each vm on each host.
   
     :param nova: A Nova client
@@ -1053,9 +1058,9 @@ def get_vms_on_host_last_cpu_util(nova, ceilo, hosts):
     """
 
     vms_last_cpu_util = dict() #dict of (vm, cpu_usage)
-    vms_hosts = vms_by_hosts(nova, hosts) #dict(host: [vms])
+    vms_hosts = common.vms_by_hosts(nova, hosts) #dict(host: [vms])
     for vms in vms_hosts.values():
-        cur_host_vms_last_cpu_util = get_vms_last_n_cpu_util(ceilo, vms)
+        cur_host_vms_last_cpu_util = common.get_vms_last_n_cpu_util(ceilo, vms)
         for vm in cur_host_vms_last_cpu_util.keys():
             vms_last_cpu_util[vm] = cur_host_vms_last_cpu_util[vm]
 
@@ -1138,9 +1143,9 @@ def migrate_vms(nova, vm_instance_directory, placement, db=None):
                 if log.isEnabledFor(logging.DEBUG):
                     log.debug('VM %s: %s, %s',
                               vm_uuid,
-                              vm_hostname(vm),
+                              common.vm_hostname(vm),
                               vm.status)
-                if vm_hostname(vm) == placement[vm_uuid] and \
+                if common.vm_hostname(vm) == placement[vm_uuid] and \
                     vm.status == u'ACTIVE':
                     vm_pair.remove(vm_uuid)
                     if db is not None: #None if using ceilometer
@@ -1149,7 +1154,7 @@ def migrate_vms(nova, vm_instance_directory, placement, db=None):
                         log.info('Completed migration of VM %s to %s',
                                  vm_uuid, placement[vm_uuid])
                 elif time.time() - start_time > 300 and \
-                    vm_hostname(vm) != placement[vm_uuid] and \
+                    common.vm_hostname(vm) != placement[vm_uuid] and \
                     vm.status == u'ACTIVE':
                     vm_pair.remove(vm_uuid)
                     retry_placement[vm_uuid] = placement[vm_uuid]
