@@ -25,6 +25,10 @@ import re
 import numpy
 import subprocess
 
+import novaclient
+from novaclient.v1_1 import client
+from ceilometerclient import client as ceiloclient
+
 from neat.config import *
 from neat.db_utils import *
 
@@ -290,3 +294,112 @@ def execute_on_hosts(hosts, commands):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             shell=True).communicate()[0]
+
+
+@contract
+def vms_by_hosts(nova, hosts):
+    """ Get a map of host names to VMs using the Nova API.
+
+    :param nova: A Nova client.
+     :type nova: *
+
+    :param hosts: A list of host names.
+     :type hosts: list(str)
+
+    :return: A dict of host names to lists of VM UUIDs.
+     :rtype: dict(str: list(str))
+    """
+    result = dict((host, []) for host in hosts)
+    for vm in nova.servers.list():
+        hostname = vm_hostname(vm)
+        if hostname in result.keys():
+            result[hostname].append(str(vm.id))
+    return result
+
+
+@contract
+def vm_hostname(vm):
+    """ Get the name of the host where VM is running.
+
+    :param vm: A Nova VM object.
+     :type vm: *
+
+    :return: The hostname.
+     :rtype: str
+    """
+    return str(getattr(vm, 'OS-EXT-SRV-ATTR:host'))
+
+
+@contract
+def vms_ram_limit(nova, vms):
+    """ Get the RAM limit from the flavors of the VMs.
+
+    :param nova: A Nova client.
+     :type nova: *
+
+    :param vms: A list of VM UUIDs.
+     :type vms: list(str)
+
+    :return: A dict of VM UUIDs to the RAM limits.
+     :rtype: dict(str: int)
+    """
+    flavors_to_ram = flavors_ram(nova)
+    vms_ram = {}
+    for uuid in vms:
+        try:
+            vm = nova.servers.get(uuid)
+            vms_ram[uuid] = flavors_to_ram[vm.flavor['id']]
+        except novaclient.exceptions.NotFound:
+            pass
+    return vms_ram
+
+
+@contract
+def flavors_ram(nova):
+    """ Get a dict of flavor IDs to the RAM limits.
+
+    :param nova: A Nova client.
+     :type nova: *
+
+    :return: A dict of flavor IDs to the RAM limits.
+     :rtype: dict(str: int)
+    """
+    return dict((str(fl.id), fl.ram) for fl in nova.flavors.list())
+
+
+def get_vms_last_n_cpu_util(ceilo, vms, last_n_vm_cpu=1, integer=False):
+    """Get last n cpu usage values for each vm in vms.
+
+    :param ceilo: A Ceilo client.
+     :type ceilo: *
+
+    :param vms: A set of vms
+     :type vms: list(str)
+
+    :param last_n_vm_cpu: Number of last cpu values to recover
+     :type last_n_vm_cpu: int
+
+    :param integer: Boolean telling if we want data as integer or float
+     :type integer: bool
+
+    :return: A dictionary of (vm, [cpu_usage])
+     :rtype: dict(str: *)
+    """
+
+    vms_last_cpu_util = dict() #dict of (vm, [cpu_util])
+    for vm in vms:
+        cpu_util_list = (
+            ceilo.samples.list(meter_name='cpu_util', 
+                               limit=last_n_vm_cpu, 
+                               q=[{'field':'resource_id',
+                                   'op':'eq',
+                                   'value':vm}]))
+    
+        #we have collected at least last_n_vm_cpu samples for current vm
+        if len(cpu_util_list) == last_n_vm_cpu:
+            if integer:
+                vms_last_cpu_util[vm] = [int(sample.counter_volume) for sample in cpu_util_list]
+            else:
+                vms_last_cpu_util[vm] = [sample.counter_volume for sample in cpu_util_list]
+
+    return vms_last_cpu_util

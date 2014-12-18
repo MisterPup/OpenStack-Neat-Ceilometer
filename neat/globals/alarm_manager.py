@@ -82,7 +82,25 @@ def service_underload():
         #alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
         #alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
         #alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
-        alarm_time_sec = time.time() #if repeat_action, than every minute a request is sent
+        #if repeat_action, and state is still "alarmed", than every minute a request is sent
+        alarm_time_sec = time.time()
+
+        #list of vms in "alarmed" host
+        host_vms = vms_by_hosts(nova_client, 
+                                [hostname])[hostname]
+
+        """
+        If 'repeat_action' attribute of alarm is set to True
+        and underloaded host has already been set to inactive
+        but it cannot be put into sleep state
+        than every minute the host is underloaded and a request is sent
+        We check that the underload host has vms on it,
+        in that case this is the first time sending this underloaded request
+        else we skip following requests
+        """
+        #if the host has already been set to inactive, so no vms on it
+        if not host_vms:
+            log.info('Host %(name)s without vms, skip underload request', {'name': hostname})
 
         log.info("Sending request to global manager")
         """
@@ -121,57 +139,48 @@ def service_overload():
         #alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
         #alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
         #alarm_time_sec = alarm_time_obj.strftime('%s') #convert timestamp to seconds from epoch
-        alarm_time_sec = time.time() #if repeat_action, than every minute a request is sent
+        #if repeat_action, and state is still "alarmed", than every minute a request is sent
+        alarm_time_sec = time.time()
 
         #log
         """
         Recover list of vms in "alarmed" host
         """
-        all_vms = nova_client.servers.list() #list of vms (Server objects)
-        host_vms = [vm for vm in all_vms if getattr(vm, 'OS-EXT-SRV-ATTR:host') == hostname] #list of vms in "alarmed" host
-
-        log.info("VMs on alarmed host '%s': %s", str(hostname), str([x.id for x in host_vms]))
+        #list of vms in "alarmed" host
+        host_vms = vms_by_hosts(nova_client, 
+                                [hostname])[hostname]
+        log.info("VMs on alarmed host '%(name)s': %(vms)s", {'name':hostname, 'vms':host_vms})
 
         """
         Recover allocated ram of vms (put in function)
         """
-        vms_ram = dict() #dict(vm_id: vm_ram)
-        for vm in host_vms:
-            vm_id = str(vm.id) #resource_id
-            #why does it return two samples? We take only the first one
-            vm_ram_sample = ceilo_client.samples.list(meter_name='memory', q=[{'field':'resource_id','op':'eq','value':vm_id}])[0]
-            vm_ram = getattr(vm_ram_sample, 'resource_metadata')['memory_mb']
-            vms_ram[vm_id] = int(vm_ram)
+        #dict(vm_id: vm_ram)
+        vms_ram = vms_ram_limit(nova, host_vms)
         log.debug('vms_ram: %(vms_ram)s', {'vms_ram':vms_ram})
 
         """
         Recover last n cpu utilization values (put in function)
         """
-
         vm_selection_params = common.parse_parameters(
             config['algorithm_vm_selection_parameters'])
         #number of last cpu values to recover
         last_n = vm_selection_params['last_n']
-        log.debug('last_n_cpu: %(last)s', {'last':last_n})
-        log.debug('vms: %(host_vms)s', {'host_vms':host_vms})        
+        log.debug('last_n_cpu: %(last)s', {'last':last_n})     
 
-        vms_last_n_cpu_util = dict() #dict (vm, ram_usage)
-        for vm in host_vms:
-            vm_id = str(vm.id) #resource_id
-            cpu_util_list = (
-                ceilo_client.samples.list(meter_name='cpu_util', 
-                                   limit=last_n, 
-                                   q=[{'field':'resource_id',
-                                       'op':'eq',
-                                       'value':vm_id}]))
-            log.debug('cpu_util_list: %(util)s - vm: %(vm)s', {'util':cpu_util_list, 'vm':vm_id}) 
-            if len(cpu_util_list) == last_n:
-                vms_last_n_cpu_util[vm_id] = [sample.counter_volume for sample in cpu_util_list]
-            else:
+        #dict(vm: [cpu_usage])
+        vms_last_n_cpu_util = get_vms_last_n_cpu_util(ceilo_client, 
+                                                      host_vms,
+                                                      last_n_vm_cpu,
+                                                      True)
+
+        #check that there are enough data for each vms
+        for vm in vms_last_n_cpu_util:
+            #we haven't collected enough data for this vm
+            if len(vms_last_n_cpu_util[vm]) != last_n:
                 log.info('No data yet for VM: %s - dropping the request', vm)
                 log.info('Skipped an overload request')
                 return state
-        log.debug('vms_last_n_cpu_util: %(last_cpu)s', {'last_cpu':[vm for vm in vms_last_n_cpu_util]})
+        log.debug('vms_last_n_cpu_util: %(last_cpu)s', {'last_cpu':vms_last_n_cpu_util})
 
         """
         Recover state information
