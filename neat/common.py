@@ -310,12 +310,30 @@ def vms_by_hosts(nova, hosts):
      :rtype: dict(str: list(str))
     """
     result = dict((host, []) for host in hosts)
+    vms_by_hosts = servers_by_hosts(nova, hosts)
+    for host, vms in hosts.items():
+        for vm in vms:
+            result[host].append(str(vm.id))
+
+@contract
+def servers_by_hosts(nova, hosts):
+    """ Get a map of host names to VMs using the Nova API.
+
+    :param nova: A Nova client.
+     :type nova: *
+
+    :param hosts: A list of host names.
+     :type hosts: list(str)
+
+    :return: A dict of host names to lists of VM UUIDs.
+     :rtype: dict(str: list(str))
+    """
+    result = dict((host, []) for host in hosts)
     for vm in nova.servers.list():
         hostname = vm_hostname(vm)
         if hostname in result.keys():
-            result[hostname].append(str(vm.id))
+            result[hostname].append(vm)
     return result
-
 
 @contract
 def vm_hostname(vm):
@@ -328,7 +346,6 @@ def vm_hostname(vm):
      :rtype: str
     """
     return str(getattr(vm, 'OS-EXT-SRV-ATTR:host'))
-
 
 @contract
 def vms_ram_limit(nova, vms):
