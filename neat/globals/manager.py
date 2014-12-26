@@ -68,20 +68,21 @@ the beginning of the global manager's execution.
 """
 
 from contracts import contract
-from neat.contracts_extra import *
-
 import bottle
 from hashlib import sha1
-import novaclient
-from novaclient.v1_1 import client
-from ceilometerclient import client as ceiloclient
 import time
 import subprocess
 import random
+import threading
+
+import novaclient
+from novaclient.v1_1 import client
+from ceilometerclient import client as ceiloclient
 
 import neat.common as common
 from neat.config import *
 from neat.db_utils import *
+from neat.contracts_extra import *
 
 import logging
 log = logging.getLogger(__name__)
@@ -225,32 +226,41 @@ def service():
              get_remote_addr(bottle.request),
              str(params))
     try:
-        if params['reason'] == 0:
-            log.info('Processing an underload of a host %s', params['host'])
-            if 'ceilometer' not in params:
+        #request sent by local manager (normal mode)
+        if 'ceilometer_alarm' not in params:
+            if params['reason'] == 0:
+                log.info('Processing an underload of a host %s', params['host'])
                 execute_underload(
                     state['config'],
                     state['state'],
-                    params['host'])
-            else: #request sent from alarm manager after underload alarm
-                execute_underload_ceilometer(
-                    state['config'],
-                    state['state'],
-                    params['host'])                
-        else:
-            log.info('Processing an overload, VMs: %s', str(params['vm_uuids']))
-            if 'ceilometer' not in params:
+                    params['host'])      
+            else: 
+                log.info('Processing an overload, VMs: %s', str(params['vm_uuids']))
                 execute_overload(
                     state['config'],
                     state['state'],
                     params['host'],
                     params['vm_uuids'])
-            else: #request sent from alarm manager after overload alarm
+        #request sent by alarm manager (ceilometer mode)
+        else:
+            if params['reason'] == 0:
+                log.info('Processing an underload of a host %s', params['host'])
+                execute_underload_ceilometer(
+                    state['config'],
+                    state['state'],
+                    params['host'])      
+            else:
+                log.info('Processing an overload, VMs: %s', str(params['vm_uuids']))
                 execute_overload_ceilometer(
                     state['config'],
                     state['state'],
                     params['host'],
                     params['vm_uuids'])
+
+            #start metadata manager in a different thread
+            manage_metadata(state['config'],
+                            state['state'])
+
     except:
         log.exception('Exception during request processing:')
         raise
@@ -291,6 +301,37 @@ def init_state(config):
             'compute_hosts': common.parse_compute_hosts(
                                         config['compute_hosts']),
             'host_macs': {}}
+
+def manage_metadata(config, state):
+    """Manage metadata of instances.
+
+    Every instance has a metadata that keeps information about the host in which the instance is.
+    Every time an instance is created or migrated, we need to update this information.
+
+    :param config: A config dictionary.
+     :type config: dict(str: *)
+
+    :param state: A state dictionary.
+     :type state: dict(str: *)
+    """
+
+    nova = state['nova']
+    compute_hosts = common.parse_compute_hosts(config['compute_hosts'])
+
+    interval = config['metadata_check_interval'] or 100 
+
+    while True:        
+        refresh_metadata(compute_hosts)
+        time.sleep(interval)
+
+def refresh_metadata(nova, compute_hosts):
+    #dict (host, [vm_id])
+    server_hosts = common.servers_by_hosts(nova, compute_hosts)
+
+    for host, vms in server_hosts:
+        metadata = {'metering.compute':host}
+        for vm in vms:           
+            nova.servers.set_meta(vm, metadata) 
 
 
 @contract

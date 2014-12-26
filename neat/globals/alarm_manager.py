@@ -112,7 +112,7 @@ def service_underload():
         Send information to global manager
         """
         r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], {'username': state['hashed_username'],
-        'password': state['hashed_password'], 'ceilometer' : 1, 'time': time.time(), 'host': hostname, 'reason': 0})) #send request to global manager
+        'password': state['hashed_password'], 'ceilometer_alarm' : 1, 'time': time.time(), 'host': hostname, 'reason': 0})) #send request to global manager
         log.info("Underload request sent to global manager")
 
 @bottle.post('/overload')
@@ -223,7 +223,7 @@ def service_overload():
         Send information to global manager
         """
         r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], {'username': state['hashed_username'],
-                'password': state['hashed_password'], 'ceilometer' : 1, 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 'vm_uuids': ','.join(vm_uuids)}))
+                'password': state['hashed_password'], 'ceilometer_alarm' : 1, 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 'vm_uuids': ','.join(vm_uuids)}))
         log.info("Overload request sent to global manager")
 
 @bottle.route('/', method='ANY')
