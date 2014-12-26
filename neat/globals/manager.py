@@ -257,11 +257,11 @@ def service():
                     params['host'],
                     params['vm_uuids'])
 
-            #start metadata manager in a different thread
-            metadata_manager = threading.Thread(target = manage_metadata, 
-                                                args = (state['config'], 
-                                                state['state']))
-            metadata_manager.start()
+        #start metadata manager in a different thread
+        metadata_manager = threading.Thread(target = manage_metadata, 
+                                            args = (state['config'], 
+                                            state['state']))
+        metadata_manager.start()
     except:
         log.exception('Exception during request processing:')
         raise
