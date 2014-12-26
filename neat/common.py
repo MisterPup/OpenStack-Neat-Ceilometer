@@ -311,9 +311,10 @@ def vms_by_hosts(nova, hosts):
     """
     result = dict((host, []) for host in hosts)
     vms_by_hosts = servers_by_hosts(nova, hosts)
-    for host, vms in hosts.items():
+    for host, vms in vms_by_hosts.items():
         for vm in vms:
             result[host].append(str(vm.id))
+    return result
 
 @contract
 def servers_by_hosts(nova, hosts):
@@ -326,7 +327,7 @@ def servers_by_hosts(nova, hosts):
      :type hosts: list(str)
 
     :return: A dict of host names to lists of VM UUIDs.
-     :rtype: dict(str: list(str))
+     :rtype: dict(str: list(*))
     """
     result = dict((host, []) for host in hosts)
     for vm in nova.servers.list():
@@ -346,6 +347,18 @@ def vm_hostname(vm):
      :rtype: str
     """
     return str(getattr(vm, 'OS-EXT-SRV-ATTR:host'))
+
+@contract
+def vm_metadata(vm):
+    """"Get metadata of VM
+
+    :param vm: A Nova VM object.
+     :type vm: *
+
+    :return: T.
+     :rtype: dict(str: *)
+    """
+    return dict(getattr(vm, 'metadata'))
 
 @contract
 def vms_ram_limit(nova, vms):

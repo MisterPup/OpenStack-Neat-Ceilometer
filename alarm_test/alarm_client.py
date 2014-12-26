@@ -13,8 +13,7 @@ request_type = 'overload'
 
 url = "http://" + host + ":" + port + "/" + request_type + "?blabla"
 
-#alarm_id = '583358a5-e1b4-48ac-9168-27d7ab135b8a'
-alarm_id = '09e531e6-51cf-48fa-8aeb-7db71ecbe387'
+alarm_id = '0cafc44b-b1d5-41cf-a5ec-8b0efd0175ad'
 
 data = {"current": "alarm", "alarm_id": alarm_id, "reason": "Transition to alarm due to 1 samples outside threshold, most recent: 89.5589116865", "reason_data": {"count": 1, "most_recent": 89.558911686528027, "type": "threshold", "disposition": "outside"}, "previous": "insufficient data"}
 

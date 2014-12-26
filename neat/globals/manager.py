@@ -179,17 +179,24 @@ def start():
     host = config['global_manager_host']
     port = config['global_manager_port']
     log.info('Starting the global manager listening to %s:%s', host, port)
+
+    #start metadata manager in a different thread
+    log.info('starting metadata manager')
+    metadata_manager = threading.Thread(target = manage_metadata, 
+                                        args = (config, state))
+    metadata_manager.start()
+
     bottle.run(host=host, port=port)
 
 
 @contract
 def get_params(request):
-    """ Return the request data as a dictionary.
+    """ return the request data as a dictionary.
 
-    :param request: A Bottle request object.
+    :param request: a bottle request object.
      :type request: *
 
-    :return: The request data dictionary.
+    :return: the request data dictionary.
      :rtype: dict(str: *)
     """
     params = dict(request.forms)
@@ -255,13 +262,7 @@ def service():
                     state['config'],
                     state['state'],
                     params['host'],
-                    params['vm_uuids'])
-
-        #start metadata manager in a different thread
-        metadata_manager = threading.Thread(target = manage_metadata, 
-                                            args = (state['config'], 
-                                            state['state']))
-        metadata_manager.start()
+                    params['vm_uuids'])        
     except:
         log.exception('Exception during request processing:')
         raise
@@ -319,10 +320,11 @@ def manage_metadata(config, state):
     nova = state['nova']
     compute_hosts = common.parse_compute_hosts(config['compute_hosts'])
 
-    interval = config['metadata_check_interval'] or 100 
+    interval = float(config['metadata_check_interval']) or 100 
 
-    while True:        
-        refresh_metadata(compute_hosts)
+    while True:
+        log.info('Metadata manager loop')
+        refresh_metadata(nova, compute_hosts)
         time.sleep(interval)
 
 def refresh_metadata(nova, hosts):
@@ -339,9 +341,9 @@ def refresh_metadata(nova, hosts):
     #dict (host, [vm_obj])
     server_hosts = common.servers_by_hosts(nova, hosts)
 
-    for host, vms in server_hosts:
+    for host, vms in server_hosts.items():
         metadata = {'metering.compute':host}
-        for vm in vms:           
+        for vm in vms:
             nova.servers.set_meta(vm, metadata) 
 
 
