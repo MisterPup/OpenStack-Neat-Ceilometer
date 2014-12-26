@@ -258,9 +258,10 @@ def service():
                     params['vm_uuids'])
 
             #start metadata manager in a different thread
-            manage_metadata(state['config'],
-                            state['state'])
-
+            metadata_manager = threading.Thread(target = manage_metadata, 
+                                                args = (state['config'], 
+                                                state['state']))
+            metadata_manager.start()
     except:
         log.exception('Exception during request processing:')
         raise
@@ -324,9 +325,19 @@ def manage_metadata(config, state):
         refresh_metadata(compute_hosts)
         time.sleep(interval)
 
-def refresh_metadata(nova, compute_hosts):
-    #dict (host, [vm_id])
-    server_hosts = common.servers_by_hosts(nova, compute_hosts)
+def refresh_metadata(nova, hosts):
+    """Keep metadata about instance-host positioning consistent.
+
+    :param nova: A Nova client.
+     :type nova: *
+
+    :param hosts: A set of hosts
+     :type hosts: list(str)    
+
+    """
+
+    #dict (host, [vm_obj])
+    server_hosts = common.servers_by_hosts(nova, hosts)
 
     for host, vms in server_hosts:
         metadata = {'metering.compute':host}
