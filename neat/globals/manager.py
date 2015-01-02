@@ -919,8 +919,8 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
                 active_hosts.append(host) #we have collected data for each vms on host
         else: #host without vms
             inactive_hosts.append(host)
-            inactive_hosts_cpu[host] = hosts_cpu_total[host]
-            inactive_hosts_ram[host] = hosts_ram_total[host]
+            inactive_hosts_cpu[host] = int(hosts_cpu_total[host])
+            inactive_hosts_ram[host] = int(hosts_ram_total[host])
             #eliminate inactive host from dicts
             del hosts_cpu_total[host]
             del hosts_cpu_usage[host]
