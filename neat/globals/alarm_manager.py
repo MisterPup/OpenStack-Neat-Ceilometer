@@ -79,7 +79,7 @@ def service_underload():
 
         alarm = ceilo_client.alarms.get(alarm_id)
         resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1 (host_node)
-        hostname = resource_id.split('_')[1] #compute1
+        hostname = resource_id.split('_')[0] #compute1
         hostname = hostname.encode('ascii','ignore') 
         #alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
         #alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
@@ -140,7 +140,7 @@ def service_overload():
         alarm_id = json.get('alarm_id')
         alarm = ceilo_client.alarms.get(alarm_id) #recover alarm info
         resource_id = alarm.__getattr__('threshold_rule')['query'][0]['value'] #compute1_compute1
-        hostname = resource_id.split('_')[1] #get host from resource_id: compute1_compute1 -> compute1
+        hostname = resource_id.split('_')[0] #get host from resource_id: compute1_compute1 -> compute1
         hostname = hostname.encode('ascii','ignore')
         #alarm_timestamp = alarm.__getattr__('state_timestamp') #get timestamp of last state changing
         #alarm_time_obj = datetime.strptime(alarm_timestamp, '%Y-%m-%dT%H:%M:%S.%f')
