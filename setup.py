@@ -90,7 +90,7 @@ setup(
             'neat-local-manager  = neat.locals.manager:start',
             'neat-global-manager = neat.globals.manager:start',
             'neat-db-cleaner     = neat.globals.db_cleaner:start',
-            'neat-alarm-manager  = neat.globals.alarm_manager:start',
+            'neat-alarm-manager  = neat.locals.alarm_manager:start',
             ]
         },
     data_files = [('/etc/init.d', ['init.d/openstack-neat-data-collector',
