@@ -202,7 +202,7 @@ def minimum_migration_time_max_cpu(last_n, vms_cpu, vms_ram):
 def minimum_migration_time_max_average_cpu(vms_avg_cpu_util, vms_ram):
     """ Selects the VM with the minimum RAM and maximum CPU usage.
 
-    :param vms_avg_cpu_util: A map of VM UUID and their CPU averate cpu utilization in the last interval.
+    :param vms_avg_cpu_util: A map of VM UUID and their average cpu utilization in the last interval.
      :type vms_avg_cpu_util: dict(str: number)
 
     :param vms_ram: A map of VM UUID and their allocated RAM.

@@ -96,16 +96,18 @@ def service_underload():
 
         """
         If 'repeat_action' attribute of alarm is set to True
-        and underloaded host has already been set to inactive
-        but it cannot be put into sleep state
-        than every minute the host is underloaded and a request is sent
-        We check that the underload host has vms on it,
-        in that case this is the first time sending this underloaded request
-        else we skip following requests
+        and the underloaded host has already been set to inactive
+        but it cannot be put into sleep state,
+        than a request is sent every minute because the host is still underloaded.
+        We check that the underloaded host has vms on it;
+        if positive, this is the first time it is sending an underload request, and
+        the algorithm proceeds;
+        else we skip this request
         """
         #if the host has already been set to inactive, so no vms on it
         if not host_vms:
             log.info('Host %(name)s without vms, skip underload request', {'name': hostname})
+            return state
 
         log.info("Sending request to global manager")
         """
