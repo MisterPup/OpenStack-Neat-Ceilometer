@@ -330,10 +330,11 @@ def servers_by_hosts(nova, hosts):
      :rtype: dict(str: list(*))
     """
     result = dict((host, []) for host in hosts)
-    for vm in nova.servers.list():
-        hostname = vm_hostname(vm)
-        if hostname in result.keys():
-            result[hostname].append(vm)
+    for host in hosts:
+        search_opts = {'host': host, 'all_tenants': True}
+        result[host] = nova.servers.list(detailed=True,
+                                         search_opts=search_opts)
+
     return result
 
 @contract

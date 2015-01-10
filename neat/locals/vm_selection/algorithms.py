@@ -186,7 +186,7 @@ def minimum_migration_time_max_cpu(last_n, vms_cpu, vms_ram):
      :rtype: str
     """
     min_ram = min(vms_ram.values())
-    max_cpu = 0
+    max_cpu = -1
     selected_vm = None
     for vm, cpu in vms_cpu.items():
         if vms_ram[vm] > min_ram:
@@ -213,7 +213,7 @@ def minimum_migration_time_max_average_cpu(vms_avg_cpu_util, vms_ram):
     """
     selected_vm = None #selected vm
     min_ram = min([vms_ram[x] for x in vms_ram]) #min allocated ram
-    max_avg_cpu_util = 0
+    max_avg_cpu_util = -1
     for vm in vms_ram:
         if vms_ram[vm] > min_ram:
             continue
