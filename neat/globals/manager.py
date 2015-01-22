@@ -554,6 +554,8 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     #dict of (host, ram_used)
     hosts_ram_usage = get_hosts_ram_usage(nova, 
                                           compute_hosts)
+    #hosts_ram_usage = get_hosts_ram_usage_ceilo(ceilo_client, 
+    #                                            hosts_ram_total)
 
     """Collect cpu util data for each vms"""
     #dict(vm: last_cpu_util)
@@ -876,6 +878,8 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
     #dict of (host, ram_used)
     hosts_ram_usage = get_hosts_ram_usage(nova, 
                                           compute_hosts)
+    #hosts_ram_usage = get_hosts_ram_usage_ceilo(ceilo_client, 
+    #                                            hosts_ram_total)
 
     """Collect cpu util data for each vms"""
     #dict(vm: last_cpu_util)
@@ -1007,7 +1011,7 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
 def get_hosts_cpu_frequency(ceilo, hosts):
     """Get cpu frequency for each host in hosts.
 
-    :param ceilo: A Ceilo client.
+    :param ceilo: A Ceilometer client.
      :type ceilo: *
 
     :param hosts: A set of hosts
@@ -1030,7 +1034,7 @@ def get_hosts_cpu_frequency(ceilo, hosts):
 def get_hosts_last_cpu_usage(ceilo, hosts):
     """Get last cpu usage of hosts.
 
-    :param ceilo: A Ceilo client.
+    :param ceilo: A Ceilometer client.
      :type ceilo: *
 
     :param hosts: A set of hosts
@@ -1055,6 +1059,32 @@ def get_hosts_last_cpu_usage(ceilo, hosts):
     return hosts_cpu_usage
 
 @contract
+def get_vms_on_hosts_last_cpu_util(nova, ceilo, hosts):
+    """Get last cpu usage for each vm on each host.
+  
+    :param nova: A Nova client
+     :type nova: *
+
+    :param ceilo: A Ceilometer client.
+     :type ceilo: *
+
+    :param hosts: A set of hosts
+     :type hosts: list(str)
+
+    :return: A dictionary of (vm, cpu_usage)
+     :rtype: dict(str: *)
+    """
+
+    vms_last_cpu_util = dict() #dict of (vm, cpu_usage)
+    vms_hosts = common.vms_by_hosts(nova, hosts) #dict(host: [vms])
+    for vms in vms_hosts.values():
+        cur_host_vms_last_cpu_util = common.get_vms_last_n_cpu_util(ceilo, vms)
+        for vm in cur_host_vms_last_cpu_util.keys():
+            vms_last_cpu_util[vm] = cur_host_vms_last_cpu_util[vm]
+
+    return vms_last_cpu_util
+
+@contract
 def get_hosts_ram_total(nova, hosts):
     """Get total RAM (free+used) of hosts.
 
@@ -1077,7 +1107,7 @@ def get_hosts_ram_total(nova, hosts):
 
 @contract
 def get_hosts_ram_usage(nova, hosts):
-    """Get RAM usage of hosts.
+    """Get RAM usage of hosts (sum of ram of each vms)
 
     :param nova: A Nova client
      :type nova: *
@@ -1095,35 +1125,12 @@ def get_hosts_ram_usage(nova, hosts):
 
     return hosts_ram_usage
 
-def get_vms_on_hosts_last_cpu_util(nova, ceilo, hosts):
-    """Get last cpu usage for each vm on each host.
-  
-    :param nova: A Nova client
-     :type nova: *
-
-    :param ceilo: A Ceilo client.
-     :type ceilo: *
-
-    :param hosts: A set of hosts
-     :type hosts: list(str)
-
-    :return: A dictionary of (vm, cpu_usage)
-     :rtype: dict(str: *)
-    """
-
-    vms_last_cpu_util = dict() #dict of (vm, cpu_usage)
-    vms_hosts = common.vms_by_hosts(nova, hosts) #dict(host: [vms])
-    for vms in vms_hosts.values():
-        cur_host_vms_last_cpu_util = common.get_vms_last_n_cpu_util(ceilo, vms)
-        for vm in cur_host_vms_last_cpu_util.keys():
-            vms_last_cpu_util[vm] = cur_host_vms_last_cpu_util[vm]
-
-    return vms_last_cpu_util
-
-
 @contract
 def host_used_ram(nova, host):
     """ Get the used RAM of the host using the Nova API.
+    The returned value can be greater than real ram usage, because the host so
+    isn't eager to assign all the demanded memory to the guest 
+    (vm with 2gb could occupy less memory)
 
     :param nova: A Nova client.
      :type nova: *
@@ -1139,6 +1146,36 @@ def host_used_ram(nova, host):
         return data[2].memory_mb
     return data[1].memory_mb
 
+@contract
+def get_hosts_ram_usage_ceilo(ceilo, hosts_ram_total):
+    """Get (real) ram usage for each host from ceilometer
+
+    :param ceilo: A Ceilometer client.
+     :type ceilo: *
+
+    :param hosts_ram_total: A dictionary of (host, total_ram)
+     :type hosts_ram_total: dict(str: *)
+
+    :return: A dictionary of (host, ram_usage)
+     :rtype: dict(str: *)
+    """
+    hosts_ram_usage = dict() #dict of (host, ram_usage)
+    for host in hosts_ram_total:        
+        #actually hostname_nodename
+        host_res_id = "_".join([host, host])
+        #sample of ram usage in percentage
+        host_mem_usage = ceilo.samples.list(meter_name='host.memory.usage',
+                                            limit=1, 
+                                            q=[{'field':'resource_id',
+                                                'op':'eq',
+                                                'value':host_res_id}])
+
+        if host_mem_usage:
+            host_mem_usage = host_mem_usage[0].counter_volume
+            host_mem_total = hosts_ram_total[host]
+            hosts_ram_usage[host] = (int)((host_mem_usage/100)*host_mem_total)
+
+    return hosts_ram_usage
 
 @contract
 def host_mac(host):
