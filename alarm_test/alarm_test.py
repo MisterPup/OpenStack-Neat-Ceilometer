@@ -11,6 +11,7 @@ from datetime import datetime
 #from keystoneclient import session
 import bottle
 from contracts import contract
+from os import environ as env
 
 @contract
 def get_hosts_cpu_frequency(ceilo, hosts):
@@ -189,6 +190,37 @@ def vm_hostname(vm):
     """
     return str(getattr(vm, 'OS-EXT-SRV-ATTR:host'))
 
+@contract
+def get_hosts_ram_usage_ceilo(ceilo, hosts_ram_total):
+    """Get ram usage for each host from ceilometer
+
+    :param ceilo: A Ceilometer client.
+     :type ceilo: *
+
+    :param hosts_ram_total: A dictionary of (host, total_ram)
+     :type hosts_ram_total: dict(str: *)
+
+    :return: A dictionary of (host, ram_usage)
+     :rtype: dict(str: *)
+    """
+    hosts_ram_usage = dict() #dict of (host, ram_usage)
+    for host in hosts_ram_total:        
+        #actually hostname_nodename
+        host_res_id = "_".join([host, host])
+        #sample of ram usage in percentage
+        host_mem_usage = ceilo.samples.list(meter_name='host.memory.usage',
+                                            limit=1, 
+                                            q=[{'field':'resource_id',
+                                                'op':'eq',
+                                                'value':host_res_id}])
+
+        if host_mem_usage:
+            host_mem_usage = host_mem_usage[0].counter_volume
+            host_mem_total = hosts_ram_total[host]
+            hosts_ram_usage[host] = (int)((host_mem_usage/100)*host_mem_total)
+
+    return hosts_ram_usage
+
 def create_alarm(resource_ids, must_print=False, must_create=False):
     web_hook = 'http://controller:9710/'
     
@@ -211,14 +243,13 @@ def create_alarm(resource_ids, must_print=False, must_create=False):
         ceilo_client.alarms.create(**alarm_cpu_high)
         ceilo_client.alarms.create(**alarm_cpu_low)
 
-
 def start():
 
         keystone = {}
-        keystone['username']="admin" #env['OS_USERNAME']
-        keystone['password']="torvergata" #env['OS_PASSWORD']
-        keystone['auth_url']="http://controller:35357/v2.0" #env['OS_AUTH_URL']
-        keystone['tenant_name']="admin" #env['OS_TENANT_NAME']
+        keystone['username'] = env['OS_USERNAME']
+        keystone['password'] = env['OS_PASSWORD']
+        keystone['auth_url'] = env['OS_AUTH_URL']
+        keystone['tenant_name'] = env['OS_TENANT_NAME']
 
         #key_client = (keyclient.Client(username=keystone['username'], password=keystone['password'], 
         #               tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
@@ -248,11 +279,14 @@ def start():
 	hosts_cpu_usage = get_hosts_last_cpu_usage(ceilo_client, compute_hosts) 
 	print "hosts_cpu_usage: %s\n" % hosts_cpu_usage
 
-	host_ram_total = get_hosts_ram_total(nova_client, compute_hosts)
-	print "host_ram_total: %s\n" % host_ram_total
+	hosts_ram_total = get_hosts_ram_total(nova_client, compute_hosts)
+	print "hosts_ram_total: %s\n" % hosts_ram_total
 
 	hosts_ram_usage = get_hosts_ram_usage(nova_client, compute_hosts)
 	print "hosts_ram_usage: %s\n" % hosts_ram_usage
+
+        hosts_ram_usage_ceilo = get_hosts_ram_usage_ceilo(ceilo_client, hosts_ram_total)
+        print "hosts_ram_usage: %s\n" % hosts_ram_usage_ceilo
 
 	vms_hosts = vms_by_hosts(nova_client, compute_hosts)
 	print "vms_hosts: %s\n" % vms_hosts
