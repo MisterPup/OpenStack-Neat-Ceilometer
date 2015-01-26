@@ -245,24 +245,24 @@ def create_alarm(resource_ids, must_print=False, must_create=False):
 
 def start():
 
-        keystone = {}
-        keystone['username'] = env['OS_USERNAME']
-        keystone['password'] = env['OS_PASSWORD']
-        keystone['auth_url'] = env['OS_AUTH_URL']
-        keystone['tenant_name'] = env['OS_TENANT_NAME']
+    keystone = {}
+    keystone['username'] = env['OS_USERNAME']
+    keystone['password'] = env['OS_PASSWORD']
+    keystone['auth_url'] = env['OS_AUTH_URL']
+    keystone['tenant_name'] = env['OS_TENANT_NAME']
 
-        #key_client = (keyclient.Client(username=keystone['username'], password=keystone['password'], 
-        #               tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
-        #auth = (v2.Password(username=keystone['username'], password=keystone['password'],
-        #               tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
-        #sess = session.Session(auth=auth)
-        #nova_client = novaclient.Client(2, session=sess)       
+#key_client = (keyclient.Client(username=keystone['username'], password=keystone['password'], 
+    #               tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
+    #auth = (v2.Password(username=keystone['username'], password=keystone['password'],
+    #               tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
+    #sess = session.Session(auth=auth)
+    #nova_client = novaclient.Client(2, session=sess)       
     
-        nova_client = (novaclient.Client(3, keystone['username'], keystone['password'], keystone['tenant_name'], 
-                        keystone['auth_url'], service_type='compute'))
+    nova_client = (novaclient.Client(3, keystone['username'], keystone['password'], keystone['tenant_name'], 
+                   keystone['auth_url'], service_type='compute'))
 	
 	ceilo_client = (ceiloclient.get_client(2, username=keystone['username'], password=keystone['password'],
-                         tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
+                    tenant_name=keystone['tenant_name'], auth_url=keystone['auth_url']))
 	
 	last_n_cpu = 2
 

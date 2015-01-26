@@ -181,10 +181,10 @@ def start():
     log.info('Starting the global manager listening to %s:%s', host, port)
 
     #start metadata manager in a different thread
-    log.info('starting metadata manager')
-    metadata_manager = threading.Thread(target = manage_metadata, 
-                                        args = (config, state))
-    metadata_manager.start()
+    #log.info('starting metadata manager')
+    #metadata_manager = threading.Thread(target = manage_metadata, 
+    #                                    args = (config, state))
+    #metadata_manager.start()
 
     bottle.run(host=host, port=port)
 
