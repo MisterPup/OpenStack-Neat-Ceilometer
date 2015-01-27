@@ -86,7 +86,7 @@ from neat.contracts_extra import *
 
 import logging
 log = logging.getLogger(__name__)
-
+log_placement = logging.getLogger(".vm_placement")
 
 ERRORS = {
     400: 'Bad input parameter: incorrect or missing parameters',
@@ -661,6 +661,9 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     if not placement:
         log.info('Nothing to migrate')
     else:
+        log_placement.info("PLACEMENT")
+        log_placement.info(placement)
+
         log.info('Started underload VM migrations')
         migrate_vms(nova, #migrate vms to chosen hosts
                     config['vm_instance_directory'],
@@ -991,6 +994,9 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
     if not placement:
         log.info('Nothing to migrate')
     else:
+        log_placement.info("PLACEMENT")
+        log_placement.info(placement)
+
         #activate inactive host to which vms will be migrated
         hosts_to_activate = list(
             set(inactive_hosts_cpu.keys()).intersection(

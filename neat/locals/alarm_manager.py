@@ -32,6 +32,7 @@ import requests
 
 import logging
 log = logging.getLogger(__name__)
+log_selection = logging.getLogger('.vm_selection')
 
 def start():
     """ Start the alarm manager web service.
@@ -150,7 +151,25 @@ def service_overload():
         #if repeat_action, and state is still "alarmed", than every minute a request is sent
         alarm_time_sec = time.time()
 
-        #log
+        """
+        Check if this is the first time sending the same overload request.
+        Only happens when the threshold is too low.
+        """
+        #list of vms in "alarmed" host
+        host_vms = common.vms_by_hosts(nova_client,
+                                       [hostname])[hostname]
+
+        """
+        If 'repeat_action' attribute of alarm is set to True
+        and the overload threshold is too low
+        than a request is sent every minute because the host is still overloaded.
+        We proceed only if the overloaded host has vms on it
+        """
+
+        if not host_vms:
+            log.info('Host %(name)s without vms, skip overload request', {'name': hostname})
+            return state
+
         """
         Recover list of vms in "alarmed" host
         """
@@ -221,6 +240,11 @@ def service_overload():
             vms_last_n_cpu_util, vms_ram, state['vm_selection_state'])
         log.info('Completed VM selection')
         
+        log_selection.info("SELECTION")
+        log_selection.info(vms_last_n_cpu_util)
+        log_selection.info(vms_ram)
+        log_selection.info(vm_uuids)
+ 
         """
         Send information to global manager
         """
