@@ -45,8 +45,8 @@ def log_info(nova, ceilo, host, host_id, root_path):
     log_meter_host_cpu_util(ceilo, host_id, path)
     log_meter_host_mem_util(ceilo, host_id, path)
     log_meter_host_cpu_mem(ceilo, host_id, path)
+    log_vms_host(nova, host, path)
     #log_alarm_host_cpu_mem(ceilo, host_id, path)
-    #log_vms_host(nova, host, path)
 
 def log_meter_host_cpu_util(ceilo, host_id, path):
     # sample of cpu util in percentage
@@ -56,9 +56,9 @@ def log_meter_host_cpu_util(ceilo, host_id, path):
                                             'op':'eq',
                                             'value':host_id}])
     host_cpu_util = (host_cpu_util[0].counter_volume)/100
-    content = ", ".join([get_cur_formatted_time(), str(host_cpu_util)])
+    content = get_string_to_write(str(host_cpu_util))
 
-    path_file = os.path.join(path, "meter_host_cpu_util")
+    path_file = get_path_to_file(path, "meter_host_cpu_util")
     write_file(path_file, content)
 
 def log_meter_host_mem_util(ceilo, host_id, path):
@@ -69,9 +69,9 @@ def log_meter_host_mem_util(ceilo, host_id, path):
                                             'op':'eq',
                                             'value':host_id}])
     host_mem_usage = (host_mem_usage[0].counter_volume)/100
-    content = ", ".join([get_cur_formatted_time(), str(host_mem_usage)])
+    content = get_string_to_write(str(host_mem_usage))
 
-    path_file = os.path.join(path, "meter_host_mem_util")
+    path_file = get_path_to_file(path, "meter_host_mem_util")
     write_file(path_file, content) 
 
 def log_meter_host_cpu_mem(ceilo, host_id, path):
@@ -81,9 +81,9 @@ def log_meter_host_cpu_mem(ceilo, host_id, path):
                                             q=[{'field':'resource_id',
                                                 'op':'eq',
                                                 'value':host_id}])    
-    content = ", ".join([get_cur_formatted_time(), str(host_cpu_mem_combo[0].counter_volume)])
+    content = get_string_to_write(str(host_cpu_mem_combo[0].counter_volume))
  
-    path_file = os.path.join(path, "meter_host_cpu_mem")
+    path_file = get_path_to_file(path, "meter_host_cpu_mem")
     write_file(path_file, content) 
 
 def log_alarm_host_cpu_mem(ceilo, host_id, path):
@@ -95,12 +95,12 @@ def log_alarm_host_cpu_mem(ceilo, host_id, path):
     for alarm in alarms:
         name = alarm.__getattr__(name)
         if "overload" in name:
-            content = ", ".join([get_cur_formatted_time(), str(alarm)])
-            path_file = os.path.join(path, "alarm_overload_host_cpu_mem")
+            content = get_string_to_write(str(alarm))
+            path_file = get_path_to_file(path, "alarm_overload_host_cpu_mem")
             write_file(path_file, content)
         elif "underload" in name:
-            content = ", ".join([get_cur_formatted_time(), str(alarm)])
-            path_file = os.path.join(path, "alarm_underload_host_cpu_mem")
+            content = get_string_to_write(str(alarm))
+            path_file = get_path_to_file(path, "alarm_underload_host_cpu_mem")
             write_file(path_file, content)
 
 def log_vms_host(nova, host, path):
@@ -108,15 +108,23 @@ def log_vms_host(nova, host, path):
     search_opts = {'host': host, 'all_tenants': True}
     vms = nova.servers.list(search_opts=search_opts)
 
-    ids = [vm.id for vm in vms]
-    content = ", ".join([get_cur_formatted_time(), str(ids)])
-    path_file = os.path.join(path, "vms")
-    write_file(path_file, ids)
+    #ids = [vm.id for vm in vms]
+    num_vms = len(vms)
+    content = get_string_to_write(str(num_vms))
+
+    path_file = get_path_to_file(path, "vms")
+    write_file(path_file, content)
 
 def write_file(path_file, content):
     out_file = open(path_file,"a")
     out_file.write(str(content) + os.linesep)
-    out_file.close()   
+    out_file.close()
+
+def get_path_to_file(path, filename):
+    return os.path.join(path, filename)
+
+def get_string_to_write(content):
+    return ", ".join([get_cur_formatted_time(), content]) 
 
 def get_cur_formatted_time():
     cur_time = time.time()
@@ -124,8 +132,7 @@ def get_cur_formatted_time():
                                    time.localtime(cur_time))
     return formatted_time
 
-#compute_hosts = ['compute02', 'compute03', 'compute04']
-compute_hosts = ['compute02']
-sleep_sec = 60
+compute_hosts = ['compute02', 'compute03', 'compute04']
+sleep_sec = 150
 base_dir = "log"
 start(compute_hosts, sleep_sec, base_dir)

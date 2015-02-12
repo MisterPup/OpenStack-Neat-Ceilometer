@@ -32,7 +32,12 @@ import requests
 
 import logging
 log = logging.getLogger(__name__)
-log_selection = logging.getLogger('.vm_selection')
+
+log_selection = logging.getLogger('vm_selection')
+handler = logging.FileHandler("/var/log/neat/alarm-manager-test.log", mode='w')
+handler.setFormatter(logging.Formatter(
+            '%(asctime)s, %(message)s'))
+log_selection.addHandler(handler)
 
 def start():
     """ Start the alarm manager web service.
@@ -63,6 +68,7 @@ def service_underload():
         - name of underloaded host
         - alarm received timestamp
     """
+
     json = bottle.request.json
     config = bottle.app().state['config']
     state = bottle.app().state['state']

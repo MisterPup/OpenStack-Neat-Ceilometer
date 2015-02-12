@@ -86,7 +86,12 @@ from neat.contracts_extra import *
 
 import logging
 log = logging.getLogger(__name__)
-log_placement = logging.getLogger(".vm_placement")
+
+log_placement = logging.getLogger('vm_placement')
+handler = logging.FileHandler("/var/log/neat/global-manager-test.log", mode='w')
+handler.setFormatter(logging.Formatter(
+            '%(asctime)s, %(message)s'))
+log_placement.addHandler(handler)
 
 ERRORS = {
     400: 'Bad input parameter: incorrect or missing parameters',
