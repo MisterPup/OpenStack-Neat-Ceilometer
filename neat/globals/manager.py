@@ -152,7 +152,7 @@ def validate_params(user, password, params):
        params['reason'] == 1 and 'vm_uuids' not in params:
         raise_error(400)
         return False
-    if params['time'] + 5 < time.time():
+    if params['time'] + 20 < time.time():
         raise_error(412)
         return False
     log.debug('Request parameters validated')
@@ -666,7 +666,7 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     if not placement:
         log.info('Nothing to migrate')
     else:
-        log_placement.info("PLACEMENT")
+        log_placement.info("PLACEMENT UNDERLOAD")
         log_placement.info(placement)
 
         log.info('Started underload VM migrations')
@@ -999,7 +999,7 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
     if not placement:
         log.info('Nothing to migrate')
     else:
-        log_placement.info("PLACEMENT")
+        log_placement.info("PLACEMENT OVERLOAD")
         log_placement.info(placement)
 
         #activate inactive host to which vms will be migrated

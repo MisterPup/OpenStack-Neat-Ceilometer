@@ -94,6 +94,9 @@ def service_underload():
         #if repeat_action, and state is still "alarmed", than every minute a request is sent
         alarm_time_sec = time.time()
 
+        log_selection.info("SELECTION UNDERLOAD")
+        log_selection.info(hostname)
+
         """
         Check if this is the first time sending the same underload request
         """
@@ -246,7 +249,8 @@ def service_overload():
             vms_last_n_cpu_util, vms_ram, state['vm_selection_state'])
         log.info('Completed VM selection')
         
-        log_selection.info("SELECTION")
+        log_selection.info("SELECTION OVERLOAD")
+        log_selection.info(hostname)
         log_selection.info(vms_last_n_cpu_util)
         log_selection.info(vms_ram)
         log_selection.info(vm_uuids)
