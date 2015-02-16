@@ -257,12 +257,14 @@ def service():
         else:
             if params['reason'] == 0:
                 log.info('Processing an underload of a host %s', params['host'])
+                state['state']['alarm_underload_print_id'] = params['alarm_underload_print_id']
                 execute_underload_ceilometer(
                     state['config'],
                     state['state'],
                     params['host'])      
             else:
                 log.info('Processing an overload, VMs: %s', str(params['vm_uuids']))
+                state['state']['alarm_overload_print_id'] = params['alarm_overload_print_id']
                 execute_overload_ceilometer(
                     state['config'],
                     state['state'],
@@ -307,7 +309,9 @@ def init_state(config):
             'hashed_password': sha1(config['os_admin_password']).hexdigest(),
             'compute_hosts': common.parse_compute_hosts(
                                         config['compute_hosts']),
-            'host_macs': {}}
+            'host_macs': {},
+            'alarm_underload_print_id': 0,
+            'alarm_overload_print_id': 0}
 
 def manage_metadata(config, state):
     """Manage metadata of instances.
@@ -666,8 +670,10 @@ def execute_underload_ceilometer(config, state, underloaded_host):
     if not placement:
         log.info('Nothing to migrate')
     else:
-        log_placement.info("PLACEMENT UNDERLOAD")
+        log_placement.info('PLACEMENT UNDERLOAD')
+        log_placement.info(underloaded_host)
         log_placement.info(placement)
+        log_placement.info('alarm_underload_print_id: %s', str(state['alarm_underload_print_id']))
 
         log.info('Started underload VM migrations')
         migrate_vms(nova, #migrate vms to chosen hosts
@@ -1000,7 +1006,9 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
         log.info('Nothing to migrate')
     else:
         log_placement.info("PLACEMENT OVERLOAD")
+        log_placement.info(overloaded_host)
         log_placement.info(placement)
+        log_placement.info('alarm_overload_print_id: %s', str(state['alarm_overload_print_id']))
 
         #activate inactive host to which vms will be migrated
         hosts_to_activate = list(

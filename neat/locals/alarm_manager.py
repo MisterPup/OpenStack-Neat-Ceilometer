@@ -75,6 +75,10 @@ def service_underload():
 
     if not json is None:
         log.info('Received underload request')
+        alarm_underload_print_id = state['alarm_underload_print_id']
+        alarm_underload_print_id += 1
+        state['alarm_underload_print_id'] = alarm_underload_print_id
+
         nova_client = state['nova']
         ceilo_client = state['ceilometer']
 
@@ -96,6 +100,7 @@ def service_underload():
 
         log_selection.info("SELECTION UNDERLOAD")
         log_selection.info(hostname)
+        log_selection.info('alarm_underload_print_id: %s', str(alarm_underload_print_id))
 
         """
         Check if this is the first time sending the same underload request
@@ -123,8 +128,10 @@ def service_underload():
         """
         Send information to global manager
         """
-        r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], {'username': state['hashed_username'],
-        'password': state['hashed_password'], 'ceilometer_alarm' : 1, 'time': time.time(), 'host': hostname, 'reason': 0})) #send request to global manager
+        r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], 
+                         {'username': state['hashed_username'], 'password': state['hashed_password'], 
+                          'ceilometer_alarm' : 1, 'time': time.time(), 'host': hostname, 'reason': 0, 
+                          'alarm_underload_print_id': alarm_underload_print_id})) #send request to global manager
         log.info("Underload request sent to global manager")
 
 @bottle.post('/overload')
@@ -142,6 +149,10 @@ def service_overload():
 
     if not json is None:
         log.info("Received overload request")
+        alarm_overload_print_id = state['alarm_overload_print_id']
+        alarm_overload_print_id += 1
+        state['alarm_overload_print_id'] = alarm_overload_print_id
+
         nova_client = state['nova']
         ceilo_client = state['ceilometer']
 
@@ -254,12 +265,15 @@ def service_overload():
         log_selection.info(vms_last_n_cpu_util)
         log_selection.info(vms_ram)
         log_selection.info(vm_uuids)
+        log_selection.info('alarm_overload_print_id: %s', str(alarm_overload_print_id))
  
         """
         Send information to global manager
         """
-        r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'], {'username': state['hashed_username'],
-                'password': state['hashed_password'], 'ceilometer_alarm' : 1, 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 'vm_uuids': ','.join(vm_uuids)}))
+        r = (requests.put('http://' + config['global_manager_host'] + ':' + config['global_manager_port'],
+                         {'username': state['hashed_username'], 'password': state['hashed_password'],
+                          'ceilometer_alarm' : 1, 'time': alarm_time_sec, 'host': hostname, 'reason': 1, 
+                          'vm_uuids': ','.join(vm_uuids), 'alarm_overload_print_id': alarm_overload_print_id}))
         log.info("Overload request sent to global manager")
 
 @bottle.route('/', method='ANY')
@@ -294,4 +308,7 @@ def init_state(config):
             'hashed_username': sha1(config['os_admin_user']).hexdigest(),
             'hashed_password': sha1(config['os_admin_password']).hexdigest(),
             'compute_hosts': common.parse_compute_hosts(config['compute_hosts']),
-            'host_macs': {}}
+            'host_macs': {},
+            'alarm_underload_print_id': 0,
+            'alarm_overload_print_id': 0}
+
