@@ -112,6 +112,13 @@ def log_alarm_host_cpu_mem(ceilo, host_id, path):
                name_state = name + ':  ' + '2'
     
             content = get_string_to_write(name_state)
+            if 'overload' in name:
+                path_file = get_path_to_file(path, "alarm_host_cpu_mem_overload")
+                write_file(path_file, content)
+            if 'underload' in name:
+                path_file = get_path_to_file(path, "alarm_host_cpu_mem_underload")
+                write_file(path_file, content)
+
             path_file = get_path_to_file(path, "alarm_host_cpu_mem")
             write_file(path_file, content)
     content = get_string_to_write("**********")

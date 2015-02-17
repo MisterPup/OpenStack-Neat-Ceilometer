@@ -122,7 +122,7 @@ def service_underload():
         #if the host has already been set to inactive, so no vms on it
         if not host_vms:
             log.info('Host %(name)s without vms, skip underload request', {'name': hostname})
-            return state
+            return {'error':'Host {} without vms, skip underload request'.format(hostname)}
 
         log.info("Sending request to global manager")
         """
@@ -188,7 +188,7 @@ def service_overload():
 
         if not host_vms:
             log.info('Host %(name)s without vms, skip overload request', {'name': hostname})
-            return state
+            return {'error':'Host {} without vms, skip overload request'.format(hostname)}
 
         """
         Recover list of vms in "alarmed" host
@@ -226,7 +226,7 @@ def service_overload():
             if len(vms_last_n_cpu_util[vm]) != last_n:
                 log.info('No data yet for VM: %s - dropping the request', vm)
                 log.info('Skipped an overload request')
-                return state
+                return {'error':'No data for some VMs'}
         log.debug('vms_last_n_cpu_util: %(last_cpu)s', {'last_cpu':vms_last_n_cpu_util})
 
         """
