@@ -59,7 +59,7 @@ def best_fit_decreasing_factory(time_step, migration_time, params):
          {})
 
 @contract
-def best_fit_decreasing_factory_no_overload(time_step, migration_time, params):
+def best_fit_decreasing_no_overload_factory(time_step, migration_time, params):
     """ Creates the Best Fit Decreasing No Overload (BFDNO) heuristic for VM placement.
     
     :param time_step: The length of the simulation time step in seconds.
@@ -84,12 +84,16 @@ def best_fit_decreasing_factory_no_overload(time_step, migration_time, params):
                     params['cpu_threshold'],
                     hosts_cpu_usage,
                     hosts_cpu_total),
-            get_total_with_threshold(params['cpu_threshold'], hosts_cpu_total),
+            get_total_with_threshold(
+                    params['cpu_threshold'],
+                    hosts_cpu_total),
             get_available_resources(
                     params['ram_threshold'],
                     hosts_ram_usage,
                     hosts_ram_total),
-            get_total_with_threshold(params['cpu_threshold'], hosts_ram_total),       
+            get_total_with_threshold(
+                    params['ram_threshold'],
+                    hosts_ram_total),       
             inactive_hosts_cpu,
             inactive_hosts_ram,
             vms_cpu,
