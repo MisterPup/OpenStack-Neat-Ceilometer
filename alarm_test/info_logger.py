@@ -95,23 +95,25 @@ def log_alarm_host_cpu_mem(ceilo, host_id, path):
     alarms = ceilo.alarms.list(q=[{'field':'meter',
                                    'op':'eq',
                                    'value':'host.cpu.util.memory.usage'}])
+    hostname = [x.strip() for x in host_id.split('_')][0]
 
     for alarm in alarms:
         name = alarm.name
         state = alarm.state
-        name_state = name + ': ' + state
-        content = get_string_to_write(name_state)
-        path_file = get_path_to_file(path, "alarm_host_cpu_mem")
-        write_file(path_file, content)
-        #name = alarm.__getattr__(name)
-        #if "overload" in name:
-        #    content = get_string_to_write(str(alarm))
-        #    path_file = get_path_to_file(path, "alarm_overload_host_cpu_mem")
-        #    write_file(path_file, content)
-        #elif "underload" in name:
-        #    content = get_string_to_write(str(alarm))
-        #    path_file = get_path_to_file(path, "alarm_underload_host_cpu_mem")
-        #    write_file(path_file, content)
+        #print hostname
+        #print name
+        if hostname in name:
+            name_state = ''
+            if state == 'ok':
+                name_state = name + ':  ' + '0'
+            elif state == 'alarm':
+                name_state = name + ':  ' + '1'
+            else:
+               name_state = name + ':  ' + '2'
+    
+            content = get_string_to_write(name_state)
+            path_file = get_path_to_file(path, "alarm_host_cpu_mem")
+            write_file(path_file, content)
     content = get_string_to_write("**********")
     path_file = get_path_to_file(path, "alarm_host_cpu_mem")
     write_file(path_file, content)
@@ -122,15 +124,10 @@ def log_vms_host(nova, host, path, flavor_dict):
     vms = nova.servers.list(search_opts=search_opts)
     path_file = get_path_to_file(path, "vms")
 
-    num_vms = len(vms)
-    content = get_string_to_write(str(num_vms))
-    write_file(path_file, content)
-
     id_flavor = [(vm.id, flavor_dict[vm.flavor['id']]) for vm in vms]
-    content = id_flavor
-    write_file(path_file, str(content))
-    content = get_string_to_write("**********")
-    write_file(path_file, str(content))
+    num_vms = len(vms)
+    content = get_string_to_write(str(num_vms) + ' , ' + str(id_flavor))
+    write_file(path_file, content)
 
 def write_file(path_file, content):
     out_file = open(path_file,"a")
