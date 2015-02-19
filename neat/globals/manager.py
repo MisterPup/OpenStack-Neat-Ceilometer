@@ -556,7 +556,8 @@ def execute_underload_ceilometer(config, state, underloaded_host):
                                               compute_hosts)
     #dict of (host, cpu_frequency_usage)
     hosts_cpu_usage = get_hosts_last_cpu_usage(ceilo_client, 
-                                               compute_hosts)
+                                               compute_hosts,
+                                               hosts_cpu_total)
     #dict of (host, total_ram)
     hosts_ram_total = get_hosts_ram_total(nova, 
                                          compute_hosts)
@@ -885,7 +886,8 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
                                               compute_hosts)
     #dict of (host, cpu_frequency_usage)
     hosts_cpu_usage = get_hosts_last_cpu_usage(ceilo_client, 
-                                               compute_hosts)
+                                               compute_hosts,
+                                               hosts_cpu_total)
     #dict of (host, total_ram)
     hosts_ram_total = get_hosts_ram_total(nova, 
                                          compute_hosts)
@@ -894,6 +896,12 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
                                           compute_hosts)
     #hosts_ram_usage = get_hosts_ram_usage_ceilo(ceilo_client, 
     #                                            hosts_ram_total)
+
+    log.info('PUPA CPU USAGE %s', str(hosts_cpu_usage))
+    log.info('PUPA CPU TOTAL %s', str(hosts_cpu_total))
+
+    log.info('PUPA RAM USAGE %s', str(hosts_ram_usage))
+    log.info('PUPA RAM TOTAL %s', str(hosts_ram_total))
 
     """Collect cpu util data for each vms"""
     #dict(vm: last_cpu_util)
@@ -989,6 +997,12 @@ def execute_overload_ceilometer(config, state, overloaded_host, vm_uuids):
 
     """Start vm placement algorithm"""
 
+    log.info('PUPB CPU USAGE %s', str(hosts_cpu_usage))
+    log.info('PUPB CPU TOTAL %s', str(hosts_cpu_total))
+
+    log.info('PUPB RAM USAGE %s', str(hosts_ram_usage))
+    log.info('PUPB RAM TOTAL %s', str(hosts_ram_total))
+
     log.info('Started overload VM placement')
     placement, state['vm_placement_state'] = vm_placement(
         hosts_cpu_usage, hosts_cpu_total,
@@ -1050,7 +1064,7 @@ def get_hosts_cpu_frequency(ceilo, hosts):
     return hosts_cpu_total
 
 @contract
-def get_hosts_last_cpu_usage(ceilo, hosts):
+def get_hosts_last_cpu_usage(ceilo, hosts, hosts_cpu_total):
     """Get last cpu usage of hosts.
 
     :param ceilo: A Ceilometer client.
@@ -1058,6 +1072,9 @@ def get_hosts_last_cpu_usage(ceilo, hosts):
 
     :param hosts: A set of hosts
      :type hosts: list(str)
+
+    :param hosts_cpu_total: A dictionary of (host, cpu_frequency)
+     :type hosts_cpu_total: dict(str: *)
 
     :return: A dictionary of (host, cpu_usage)
      :rtype: dict(str: *)
@@ -1073,7 +1090,8 @@ def get_hosts_last_cpu_usage(ceilo, hosts):
                                    'op':'eq',
                                    'value':host_id}]))
         if cpu_usage_list:
-            hosts_cpu_usage[host] = cpu_usage_list[0].counter_volume
+            hosts_cpu_usage[host] = (
+                (cpu_usage_list[0].counter_volume / 100) * (hosts_cpu_total[host]))
 
     return hosts_cpu_usage
 

@@ -86,14 +86,16 @@ def best_fit_decreasing_no_overload_factory(time_step, migration_time, params):
                     hosts_cpu_total),
             get_total_with_threshold(
                     params['cpu_threshold'],
-                    hosts_cpu_total),
+                    hosts_cpu_total,
+                    inactive_hosts_cpu),
             get_available_resources(
                     params['ram_threshold'],
                     hosts_ram_usage,
                     hosts_ram_total),
             get_total_with_threshold(
                     params['ram_threshold'],
-                    hosts_ram_total),       
+                    hosts_ram_total,
+                    inactive_hosts_ram),       
             inactive_hosts_cpu,
             inactive_hosts_ram,
             vms_cpu,
@@ -104,20 +106,34 @@ def best_fit_decreasing_no_overload_factory(time_step, migration_time, params):
          {})
 
 @contract
-def get_total_with_threshold(threshold, total):
+def get_total_with_threshold(threshold, total_active, total_inactive):
     """Return the total resource capacity, limited by threshold
 
     :param threshold: A threshold on the maximum allowed resource usage.
      :type threshold: float,>=0
 
-    :param total: A map of hosts to the total resource capacity.
-     :type total: dict(str: number)
+    :param total_active: A map of active hosts to the total resource capacity.
+     :type total_active: dict(str: number)
+
+    :param total_inactive: A map of inactive hosts to the total resource capacity.
+     :type total_inactive: dict(str: number)
 
     :return: A map of hosts to the total resource capacity, limited by threshold.
      :rtype: dict(str: int)
     """
-    return dict((host, int(threshold * total[host]))
-                for host in total.keys())
+    total_threshold = {}
+    for host in total_active.keys():
+        total_threshold[host] = int(threshold * total_active[host]) 
+    
+    for host in total_inactive.keys():
+        total_threshold[host] = int(threshold * total_inactive[host])
+
+    log.info('TOTAL %s', total_threshold)
+
+    return total_threshold
+
+    #return dict((host, int(threshold * total[host]))
+    #            for host in total.keys())
 
 @contract
 def get_available_resources(threshold, usage, total):
@@ -242,8 +258,25 @@ def check_no_overload_if_placement(cpu_weight, ram_weight, overload_threshold,
      :rtype bool
 
     """
-    cpu_term = cpu_weight * (host_cpu + vm_cpu) / (total_threshold_cpu)
-    ram_term = ram_weight * (host_ram + vm_ram) / (total_threshold_ram)
+    host_cpu = host_cpu if (host_cpu < total_threshold_cpu) else total_threshold_cpu
+    host_ram = host_ram if (host_ram < total_threshold_ram) else total_threshold_ram
+
+    log.info('hc: %s', host_cpu)
+    log.info('hr: %s', host_ram)
+
+    cpu_term = cpu_weight * (total_threshold_cpu - (host_cpu - vm_cpu)) / (total_threshold_cpu)
+    ram_term = ram_weight * (total_threshold_ram - (host_ram - vm_ram)) / (total_threshold_ram)
+    total = cpu_term + ram_term
+    b = total < overload_threshold
+   
+    log.info('w: %(w)s, h: %(h)s, v: %(v)s, t: %(t)s', {'w': cpu_weight, 'h': host_cpu, 'v': vm_cpu, 't': total_threshold_cpu})
+    log.info('w: %(w)s, h: %(h)s, v: %(v)s, t: %(t)s', {'w': ram_weight, 'h': host_ram, 'v': vm_ram, 't': total_threshold_ram})
+    log.info('CPU TERM %s', str(cpu_term))
+    log.info('RAM TERM %s', str(ram_term))
+    log.info('TOTAL %s', str(total))
+    log.info('THRESHOLD %s', str(overload_threshold))
+    log.info('NO OVERLOAD %s', str(b))
+ 
     return cpu_term + ram_term < overload_threshold
 
 @contract
@@ -294,6 +327,9 @@ def best_fit_decreasing_no_overload(last_n_vm_cpu, hosts_cpu, total_threshold_cp
     :return: A map of VM UUIDs to host names, or {} if cannot be solved.
      :rtype: dict(str: str)
     """
+
+    log.info('BIN HOSTS_CPU: %s', str(hosts_cpu))
+
     vms_tmp = []
     for vm, cpu in vms_cpu.items():
         last_n_cpu = cpu[-last_n_vm_cpu:]
@@ -303,6 +339,9 @@ def best_fit_decreasing_no_overload(last_n_vm_cpu, hosts_cpu, total_threshold_cp
     vms = sorted(vms_tmp, reverse=True)
     hosts = sorted(((v, hosts_ram[k], k)
                     for k, v in hosts_cpu.items()))
+
+    log.info('BIN HOSTS %s', str(hosts))
+
     inactive_hosts = sorted(((v, inactive_hosts_ram[k], k)
                              for k, v in inactive_hosts_cpu.items()))
 
@@ -311,6 +350,7 @@ def best_fit_decreasing_no_overload(last_n_vm_cpu, hosts_cpu, total_threshold_cp
         mapped = False
         while not mapped:
             for _, _, host in hosts:
+                log.info("BIN CYCLE %s", str(host))
                 if (hosts_cpu[host] >= vm_cpu and
                     hosts_ram[host] >= vm_ram and
                     check_no_overload_if_placement(cpu_weight, ram_weight, overload_threshold,
@@ -322,6 +362,7 @@ def best_fit_decreasing_no_overload(last_n_vm_cpu, hosts_cpu, total_threshold_cp
                         mapped = True
                         break
             else:
+                log.info("ELSE")
                 if inactive_hosts:
                     activated_host = inactive_hosts.pop(0)
                     hosts.append(activated_host)
