@@ -228,7 +228,7 @@ def check_no_overload_if_placement(cpu_weight, ram_weight, overload_threshold,
     """ Check if placing the vm on the selected host, will make it overloaded.
 
     :param cpu_weight: Weight of the CPU in the combined meter.
-     :type cpu_weight: float,>= 0
+     :type cpu_weight: float,>=0
 
     :param ram_weight: Weight of the RAM in the combined meter.
      :type ram_weight: float,>=0
@@ -237,7 +237,7 @@ def check_no_overload_if_placement(cpu_weight, ram_weight, overload_threshold,
      :type overload_threshold: float,>=0
 
     :param vm_cpu: CPU utilization of the vm in MHz.
-     :type vm_cpu: int,>0
+     :type vm_cpu: int,>=0
 
     :param host_cpu: Host available CPU in MHz.
      :type host_cpu: int,>0
