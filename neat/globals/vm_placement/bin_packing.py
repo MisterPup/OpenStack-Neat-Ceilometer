@@ -207,8 +207,8 @@ def best_fit_decreasing(last_n_vm_cpu, hosts_cpu, hosts_ram,
 
 @contract
 def check_no_overload_if_placement(cpu_weight, ram_weight, overload_threshold,
-                        vm_cpu, hosts_cpu, total_threshold_cpu,
-                        vm_ram, hosts_ram, total_threshold_ram):
+                        vm_cpu, host_cpu, total_threshold_cpu,
+                        vm_ram, host_ram, total_threshold_ram):
     """ Check if placing the vm on the selected host, will make it overloaded.
 
     :param cpu_weight: Weight of the CPU in the combined meter.
@@ -223,20 +223,20 @@ def check_no_overload_if_placement(cpu_weight, ram_weight, overload_threshold,
     :param vm_cpu: CPU utilization of the vm in MHz.
      :type vm_cpu: int,>0
 
-    :param hosts_cpu: A map of host names and their available CPU in MHz.
-     :type hosts_cpu: dict(str: int)
+    :param host_cpu: Host available CPU in MHz.
+     :type host_cpu: int,>0
 
-    :param total_threshold_cpu: total CPU capacity of the host, limited by threshold.
-     :type total_threshold_cpu: int
+    :param total_threshold_cpu: Host total CPU capacity, limited by threshold.
+     :type total_threshold_cpu: int,>0
 
     :param vm_ram: RAM usage of the VM in MB.
      :type vm_ram: int,>0
 
-    :param hosts_ram: A map of host names and their available RAM in MB.
-     :type hosts_ram: dict(str: int)
+    :param host_ram: Host available RAM in MB.
+     :type host_ram: int,>0
 
-    :param total_threshold_ram: total RAM capacity of the host, limited by threshold.
-     :type total_threshold_ram: int, >0
+    :param total_threshold_ram: Host total RAM capacity per host, limited by threshold.
+     :type total_threshold_ram: int,>0
 
     :return: A boolean telling if the vm can be placed on the host, without making it overloaded.
      :rtype bool
@@ -262,13 +262,13 @@ def best_fit_decreasing_no_overload(last_n_vm_cpu, hosts_cpu, total_threshold_cp
      :type hosts_cpu: dict(str: int)
 
     :param total_threshold_cpu: total CPU capacity of the host, limited by threshold.
-     :type total_threshold_cpu: int
+     :type total_threshold_cpu: dict(str: int)
 
     :param hosts_ram: A map of host names and their available RAM in MB.
      :type hosts_ram: dict(str: int)
 
     :param total_threshold_ram: total RAM capacity of the host, limited by threshold.
-     :type total_threshold_ram: int, >0
+     :type total_threshold_ram: dict(str: int)
 
     :param inactive_hosts_cpu: A map of inactive hosts and available CPU MHz.
      :type inactive_hosts_cpu: dict(str: int)
