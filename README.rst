@@ -18,4 +18,5 @@ The following changes have been added to OpenStack Neat:
   a Ceilometer Alarm goes into alarm state because an host have been found overloaded or underloaded
 * The *Global Manager* have been integrated with Ceilometer
 * A new version of the heuristic *Best Fit Decreasing* for solving the **Bin Packing Problem** have been created by
-  taking into consideration the combined meter to avoid migrations to overloaded hosts.
+  taking into consideration the combined meter to avoid migrations to overloaded hosts
+* System V scripts have been realized to control Alarm and Global Manager under Debian based distros
