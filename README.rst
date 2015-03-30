@@ -4,7 +4,7 @@ OpenStack-Neat-Ceilometer
 
 This work is an extension to OpenStack Neat. Is has been realized in the context of the Master's Thesis:
 *"A unified framework for resources monitoring and virtual machines migration in OpenStack"*.
-We have **integrated** Ceilometer into Neat. Hosta are monitored by checking on samples of a new meter, defined from
+We have **integrated** Ceilometer into Neat. Hosts are monitored by checking on samples of a new meter, defined from
 a combination of host cpu utilization and host memory utilization.
 When a threshold is crossed, an alarm triggers and a request is sent to an endpoint. Behind this endpoint there are two
 services which handle the request to bring the alarmed host into a normal state.
