@@ -11,7 +11,8 @@ OpenStack-Neat-Ceilometer
 
 | This work consists in an extension to OpenStack Neat, and an extension to Ceilometer, visible in
 | https://github.com/MisterPup/Ceilometer-Juno-Extension.git
-| The following changes have been added to OpenStack Neat:
+
+The following changes have been added to OpenStack Neat:
 
 * The *Data Collector* have been substited by the *Compute Agent* of Ceilometer in the task of polling samples
 
