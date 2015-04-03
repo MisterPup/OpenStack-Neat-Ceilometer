@@ -8,10 +8,10 @@ OpenStack-Neat-Ceilometer
 | a combination of host cpu utilization and host memory utilization.
 | When a threshold is crossed, an alarm triggers and a request is sent to an endpoint. Behind this endpoint there are two
 | services which handle the request to bring the alarmed host into a normal state.
-
+|
 | The thesis consists in an extension to OpenStack Neat (this repository), and an extension to Ceilometer
 | (https://github.com/MisterPup/Ceilometer-Juno-Extension.git)
-
+|
 The following changes have been added to OpenStack Neat:
 
 * The *Data Collector* have been substited by the *Compute Agent* of Ceilometer in the task of polling samples
